@@ -1,4 +1,5 @@
 from process import *
+from network import *
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
 from torch.autograd import Variable
