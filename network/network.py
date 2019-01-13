@@ -2,7 +2,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-
+# LeNet
 class NaiveNet(nn.Module):
     def __init__(self, is_BN=False):
         super(NaiveNet, self).__init__()
@@ -39,6 +39,10 @@ class NaiveNet(nn.Module):
         out = self.fc3(self.fc2(self.fc1(x)))
         return F.softmax(out, dim=1)
 
+    def test(self):
+        pass
+
+# channel dropout
 class DropoutNet(nn.Module):
     def __init__(self, p=0.5):
         super(DropoutNet, self).__init__()
@@ -48,12 +52,11 @@ class DropoutNet(nn.Module):
         self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        self.fc1 = nn.Linear(8 * 8 * 128, 1024)
+        self.fc1 = nn.Linear(7 * 7 * 128, 1024)
         self.fc2 = nn.Linear(1024, 10)
 
     def test(self):
         self.dropout1.training = False
-        self.dropout2.training = False
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
@@ -67,16 +70,16 @@ class DropoutNet(nn.Module):
         return F.softmax(x, dim=1)
 
 
-
+# stigmergy network
 class StigmergyNet(nn.Module):
     def __init__(self):
         super(StigmergyNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-    def forward(self, *input):
+    def forward(self, x):
         pass
 
-
-
+    def test(self):
+        pass
 

@@ -3,14 +3,13 @@ import numpy as np
 import struct
 from torch.utils.data.dataset import Dataset
 
-tlabel_path = '../data/MNIST/train-labels.idx1-ubyte'
-tdata_path = '../data/MNIST/train-images.idx3-ubyte'
-test_label_path = '../data/MNIST/t10k-labels.idx1-ubyte'
-test_data_path = '../data/MNIST/t10k-images.idx3-ubyte'
+tlabel_path = './data/MNIST/train-labels.idx1-ubyte'
+tdata_path = './data/MNIST/train-images.idx3-ubyte'
+test_label_path = './data/MNIST/t10k-labels.idx1-ubyte'
+test_data_path = './data/MNIST/t10k-images.idx3-ubyte'
 # 数据读取
 def data_load():
-    # 读取训练数据
-
+    # 读取训练
     with open(tlabel_path, 'rb') as f:
         magic, n = struct.unpack('>II',
                                  f.read(8))

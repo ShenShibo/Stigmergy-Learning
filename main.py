@@ -13,8 +13,8 @@ def accuracy(outputs, labels):
     correct = (predicted == labels.data).sum()
     return correct
 
-
 def validate(net, loader, use_cuda=False):
+    net.test()
     correct_count = 0.
     count = 0.
     if use_cuda:
@@ -40,7 +40,8 @@ def train():
         use_cuda = False
     # torch.cuda.set_device(1)
     # 网络声明
-    net = NaiveNet(is_BN=False)
+    # net = NaiveNet(is_BN=False)
+    net = DropoutNet(p=0.5)
     if use_cuda:
         net = net.cuda()
     # 超参数设置
@@ -99,7 +100,7 @@ def train():
                 vacc_save.append(acc)
         if (epoch + 1) % 1 == 0:
             print("save")
-            torch.save(net.state_dict(), '../model/naive_net{}.p'.format(epoch + 1))
+            torch.save(net.state_dict(), './model/dropout_net{}.p'.format(epoch + 1))
     dic = {}
     dic['loss'] = loss_save
     dic['training_accuracy'] = tacc_save
