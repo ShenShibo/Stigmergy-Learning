@@ -13,6 +13,7 @@ def accuracy(outputs, labels):
     correct = (predicted == labels.data).sum()
     return correct
 
+
 def validate(net, loader, use_cuda=False):
     net.test()
     correct_count = 0.
@@ -53,6 +54,7 @@ def train():
     criterion = nn.CrossEntropyLoss()
     # 自定义优化器
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=0.00001)
+    optimizer.zero_grad()
     lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.1)
     # 数据读入
     train_data, train_label, validate_data, validate_label = data_load()
@@ -78,9 +80,9 @@ def train():
                 b_x = b_x.cuda()
                 b_y = b_y.cuda()
             #
-            optimizer.zero_grad()
-
             outputs = net(b_x)
+
+            optimizer.zero_grad()
             loss = criterion(outputs, b_y)
             loss.backward()
             optimizer.step()

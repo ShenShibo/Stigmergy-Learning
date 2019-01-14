@@ -1,7 +1,8 @@
 # -*-coding:utf-8-*-
 import torch.nn as nn
 import torch.nn.functional as F
-
+import torch
+from torch._jit_internal import weak_script_method, weak_module
 # LeNet
 class NaiveNet(nn.Module):
     def __init__(self, is_BN=False):
@@ -42,6 +43,9 @@ class NaiveNet(nn.Module):
     def test(self):
         pass
 
+    def stigmergy(self):
+        pass
+
 # channel dropout
 class DropoutNet(nn.Module):
     def __init__(self, p=0.5):
@@ -69,6 +73,9 @@ class DropoutNet(nn.Module):
         x = F.relu(self.fc2(x))
         return F.softmax(x, dim=1)
 
+    def stigmergy(self):
+        pass
+
 
 # stigmergy network
 class StigmergyNet(nn.Module):
@@ -76,10 +83,66 @@ class StigmergyNet(nn.Module):
         super(StigmergyNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.cMask = torch.Tensor(1, 128, 1, 1)
+        self.cMask.fill_(0.5)
+        self.conv2 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.training = True
+        self.fc1 = nn.Linear(7 * 7 * 128, 1024)
+        self.fc2 = nn.Linear(1024, 10)
 
     def forward(self, x):
-        pass
+        x = F.relu(self.conv1(x))
+        x = self.pool1(x)
+        self._stigmergy()
+        x = x * self.cMask.expand_as(x)
+        x = F.relu(self.conv2(x))
+        x = self.pool2(x)
+
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        out = F.relu(self.fc2(x))
+
+        return F.softmax(out, dim=1)
 
     def test(self):
+        self.training = False
+
+    def _stigmergy(self):
+        p = 0.5
+        if self.training:
+            self.cMask = torch.rand(1, 128, 1, 1) >= p
+            self.cMask = self.cMask.type(dtype=torch.float32)
+        else:
+            self.cMask.fill_(p)
+
+
+
+# sitgmergy conv function
+@weak_module
+class StigmergyConv(nn.Conv2d):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1,
+                 padding=0, dilation=1, groups=1, bias=True,
+                 stigMask=False):
+        super(StigmergyConv, self).__init__(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias
+        )
+        self.stigMask = stigMask
+        assert self.stigMask is not False
+        out_C = 100
+        in_C = 5
+
+    @weak_script_method
+    def forward(self, input):
+
         pass
+
 
