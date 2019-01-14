@@ -39,7 +39,7 @@ def train():
     use_cuda = True
     if torch.cuda.is_available() is False:
         use_cuda = False
-    # torch.cuda.set_device(1)
+    torch.cuda.set_device(1)
     # 网络声明
     # net = NaiveNet(is_BN=False)
     net = StigmergyNet()
