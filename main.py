@@ -42,7 +42,7 @@ def train():
     # torch.cuda.set_device(1)
     # 网络声明
     # net = NaiveNet(is_BN=False)
-    net = DropoutNet(p=0.5)
+    net = StigmergyNet()
     if use_cuda:
         net = net.cuda()
     # 超参数设置

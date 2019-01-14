@@ -46,6 +46,7 @@ class NaiveNet(nn.Module):
     def stigmergy(self):
         pass
 
+
 # channel dropout
 class DropoutNet(nn.Module):
     def __init__(self, p=0.5):
@@ -84,8 +85,8 @@ class StigmergyNet(nn.Module):
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.cMask = torch.Tensor(1, 128, 1, 1)
-        self.cMask.fill_(0.5)
-        self.conv2 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.cMask.fill_(1)
+        self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.training = True
@@ -95,8 +96,9 @@ class StigmergyNet(nn.Module):
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = self.pool1(x)
+
         self._stigmergy()
-        x = x * self.cMask.expand_as(x)
+        x = x * self.cMask
         x = F.relu(self.conv2(x))
         x = self.pool2(x)
 
@@ -112,37 +114,15 @@ class StigmergyNet(nn.Module):
     def _stigmergy(self):
         p = 0.5
         if self.training:
-            self.cMask = torch.rand(1, 128, 1, 1) >= p
-            self.cMask = self.cMask.type(dtype=torch.float32)
+            self.cMask.fill_(1.)
+            # 随机选择一半特征图置0
+            self.cMask[:, torch.randperm(128)[:64], :, :].fill_(0)
         else:
             self.cMask.fill_(p)
 
+    def cuda(self, device=None):
+        self.cMask = self.cMask.cuda(device=device)
+        return self._apply(lambda t: t.cuda(device))
 
-
-# sitgmergy conv function
-@weak_module
-class StigmergyConv(nn.Conv2d):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1,
-                 padding=0, dilation=1, groups=1, bias=True,
-                 stigMask=False):
-        super(StigmergyConv, self).__init__(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            padding=padding,
-            dilation=dilation,
-            groups=groups,
-            bias=bias
-        )
-        self.stigMask = stigMask
-        assert self.stigMask is not False
-        out_C = 100
-        in_C = 5
-
-    @weak_script_method
-    def forward(self, input):
-
-        pass
 
 
