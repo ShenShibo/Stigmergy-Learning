@@ -86,18 +86,18 @@ class StigmergyNet(nn.Module):
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.cMask = torch.Tensor(1, 128, 1, 1)
         self.cMask.fill_(1)
-        self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=128, out_channels=127, kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.training = True
-        self.fc1 = nn.Linear(7 * 7 * 128, 1024)
+        self.fc1 = nn.Linear(7 * 7 * 127, 1024)
         self.fc2 = nn.Linear(1024, 10)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = self.pool1(x)
 
-        self._stigmergy()
+        self._dropout()
         x = x * self.cMask
         x = F.relu(self.conv2(x))
         x = self.pool2(x)
@@ -111,7 +111,7 @@ class StigmergyNet(nn.Module):
     def test(self):
         self.training = False
 
-    def _stigmergy(self):
+    def _dropout(self):
         p = 0.5
         if self.training:
             self.cMask.fill_(1.)
@@ -119,6 +119,11 @@ class StigmergyNet(nn.Module):
             self.cMask[:, torch.randperm(128)[:64], :, :].fill_(0)
         else:
             self.cMask.fill_(p)
+
+    def _stigmergy(self):
+        wg = self.conv2.weight.grad
+        
+
 
     def cuda(self, device=None):
         self.cMask = self.cMask.cuda(device=device)
