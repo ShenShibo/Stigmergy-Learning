@@ -15,7 +15,6 @@ def accuracy(outputs, labels):
 
 
 def validate(net, loader, use_cuda=False):
-    net.test()
     correct_count = 0.
     count = 0.
     if use_cuda:
@@ -43,17 +42,17 @@ def train():
     # 网络声明
     # net = NaiveNet(is_BN=False)
     net = StigmergyNet()
+    # net = DropoutNet(p=0.5)
     if use_cuda:
         net = net.cuda()
     # 超参数设置
     epochs = 10
     lr = 0.1
-    batch_size = 128
-
+    batch_size = 64
     # 参数设置
     criterion = nn.CrossEntropyLoss()
     # 自定义优化器
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=0.00001)
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0., weight_decay=0.)
     optimizer.zero_grad()
     lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.1)
     # 数据读入
@@ -80,6 +79,7 @@ def train():
                 b_x = b_x.cuda()
                 b_y = b_y.cuda()
             #
+            # optimizer.zero_grad()
             outputs = net(b_x)
 
             optimizer.zero_grad()
@@ -92,6 +92,7 @@ def train():
             count += size
             correct_count += accuracy(outputs, b_y).item()
             if (i + 1) % 15 == 0:
+                net.test()
                 acc = validate(net, validate_loader, use_cuda)
                 print('[ %d-%d ] loss: %.9f, \n'
                       'training accuracy: %.6f, \n'
@@ -100,6 +101,7 @@ def train():
                 tacc_save.append(correct_count / count)
                 loss_save.append(running_loss / count)
                 vacc_save.append(acc)
+                net.train()
         if (epoch + 1) % 1 == 0:
             print("save")
             torch.save(net.state_dict(), './model/dropout_net{}.p'.format(epoch + 1))

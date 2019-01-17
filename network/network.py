@@ -46,7 +46,6 @@ class NaiveNet(nn.Module):
     def stigmergy(self):
         pass
 
-
 # channel dropout
 class DropoutNet(nn.Module):
     def __init__(self, p=0.5):
@@ -61,9 +60,11 @@ class DropoutNet(nn.Module):
         self.fc2 = nn.Linear(1024, 10)
 
     def test(self):
+        self.training = False
         self.dropout1.training = False
 
     def forward(self, x):
+        self._stigmergy()
         x = F.relu(self.conv1(x))
         x = self.pool1(x)
         x = self.dropout1(x)
@@ -74,9 +75,15 @@ class DropoutNet(nn.Module):
         x = F.relu(self.fc2(x))
         return F.softmax(x, dim=1)
 
-    def stigmergy(self):
-        pass
-
+    def _stigmergy(self):
+        if self.training is False:
+            return
+        wg = self.conv2.weight.grad
+        if wg is None:
+            return
+        else:
+            temp_norm = torch.norm(wg.data, dim=(2, 3))
+            influence_values = temp_norm.sum(dim=0)
 
 # stigmergy network
 class StigmergyNet(nn.Module):
@@ -85,12 +92,12 @@ class StigmergyNet(nn.Module):
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.cMask = torch.Tensor(1, 128, 1, 1)
-        self.cMask.fill_(1)
-        self.conv2 = nn.Conv2d(in_channels=128, out_channels=127, kernel_size=3, stride=1, padding=1)
+        self.cMask.fill_(1.)
+        self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.training = True
-        self.fc1 = nn.Linear(7 * 7 * 127, 1024)
+        self.fc1 = nn.Linear(7 * 7 * 128, 1024)
         self.fc2 = nn.Linear(1024, 10)
 
     def forward(self, x):
@@ -101,7 +108,7 @@ class StigmergyNet(nn.Module):
         x = x * self.cMask
         x = F.relu(self.conv2(x))
         x = self.pool2(x)
-
+        self._stigmergy()
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         out = F.relu(self.fc2(x))
@@ -113,17 +120,26 @@ class StigmergyNet(nn.Module):
 
     def _dropout(self):
         p = 0.5
+        dim = 128
         if self.training:
             self.cMask.fill_(1.)
             # 随机选择一半特征图置0
-            self.cMask[:, torch.randperm(128)[:64], :, :].fill_(0)
+            index = torch.randperm(dim)[:dim//2]
+            self.cMask[:, index, :, :] = 0.
+            # print(self.cMask.view(128))
         else:
             self.cMask.fill_(p)
 
     def _stigmergy(self):
+        if self.training is False:
+            return
         wg = self.conv2.weight.grad
-        
-
+        if wg is None:
+            return
+        else:
+            temp_norm = torch.norm(wg.data, dim=(2, 3))
+            influence_values = temp_norm.sum(dim=0)
+        print(influence_values)
 
     def cuda(self, device=None):
         self.cMask = self.cMask.cuda(device=device)
