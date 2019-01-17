@@ -46,7 +46,7 @@ def train():
     if use_cuda:
         net = net.cuda()
     # 超参数设置
-    epochs = 10
+    epochs = 50
     lr = 0.1
     batch_size = 64
     # 参数设置
@@ -54,7 +54,7 @@ def train():
     # 自定义优化器
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0., weight_decay=0.)
     optimizer.zero_grad()
-    lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.1)
+    lr_scheduler = StepLR(optimizer, step_size=5, gamma=0.1)
     # 数据读入
     train_data, train_label, validate_data, validate_label = data_load()
     # 生成数据集
