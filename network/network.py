@@ -93,8 +93,9 @@ class StigmergyNet(nn.Module):
         super(StigmergyNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.scale = 1.
         self.cMask = torch.Tensor(1, 128, 1, 1)
-        self.cMask.fill_(.5)
+        self.cMask.fill_(self.scale)
         self.state_value = torch.ones(128)
         self.state_value = F.softmax(self.state_value, dim=0)
         self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
@@ -107,8 +108,8 @@ class StigmergyNet(nn.Module):
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = self.pool1(x)
-        self._stigmergy()
-        # self._dropout()
+        # self._stigmergy()
+        self._dropout()
         x = x * self.cMask
         x = F.relu(self.conv2(x))
         x = self.pool2(x)
@@ -151,9 +152,9 @@ class StigmergyNet(nn.Module):
             # 参与计算的通道index
             temp_if = influence_values[influence_values > 0.]
             # 计算中值
-            median = torch.median((-temp_if).exp())
+            median = torch.median((temp_if).exp())
             # 减去中值(也可以减去均值)
-            influence_values = (-influence_values).exp() - median
+            influence_values = self.scale * ((influence_values).exp() - median)
             # 乘以掩码，去掉未参与通道数
             influence_values = self.cMask.view(128) * influence_values
             self.state_value = F.softmax(self.state_value + influence_values, dim=0)
