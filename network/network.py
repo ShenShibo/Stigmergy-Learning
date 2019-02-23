@@ -89,7 +89,7 @@ class DropoutNet(nn.Module):
 
 # stigmergy network
 class StigmergyNet(nn.Module):
-    def __init__(self):
+    def __init__(self, p):
         super(StigmergyNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -100,7 +100,7 @@ class StigmergyNet(nn.Module):
         self.state_value = F.softmax(self.state_value, dim=0)
         self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-
+        self.p = p
         self.training = True
         self.fc1 = nn.Linear(7 * 7 * 128, 1024)
         self.fc2 = nn.Linear(1024, 10)
@@ -123,12 +123,13 @@ class StigmergyNet(nn.Module):
         self.training = False
 
     def _dropout(self):
-        p = 0.5
+        assert self.p > 0. and self.p < 1.
+        p = self.p
         dim = 128
         if self.training:
             self.cMask.fill_(1.)
             # 随机选择一半特征图置0
-            index = torch.randperm(dim)[:dim//2]
+            index = torch.randperm(dim)[:int(dim * p)]
             self.cMask[:, index, :, :] = 0.
             # print(self.cMask.view(128))
         else:
@@ -136,12 +137,15 @@ class StigmergyNet(nn.Module):
 
     def _stigmergy(self):
         dim = 128
+        assert self.p > 0. and self.p < 1.
+        p = self.p
         if self.training is False:
             return
         wg = self.conv2.weight.grad
+        end = int(dim * p)
         if wg is None:
             self.cMask.fill_(0.)
-            index = torch.randperm(dim)[:dim // 2]
+            index = torch.randperm(dim)[:end]
             self.cMask[:, index, :, :] = 1.
             return
         else:
@@ -159,7 +163,7 @@ class StigmergyNet(nn.Module):
             influence_values = self.cMask.view(128) * influence_values
             self.state_value = F.softmax(self.state_value + influence_values, dim=0)
             # 升序排列，排列好的数值在原先tensor中的索引
-            index = torch.argsort(self.state_value, descending=True)[:dim//2]
+            index = torch.argsort(self.state_value, descending=True)[:end]
             # 生成掩码
             self.cMask.fill_(0.)
             self.cMask[:, index, :, :] = 1.
@@ -169,5 +173,25 @@ class StigmergyNet(nn.Module):
         self.cMask = self.cMask.cuda(device=device)
         return self._apply(lambda t: t.cuda(device))
 
+
+class WCDNetwork(nn.Module):
+    def __init__(self):
+        super(WCDNetwork, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.scale = 1.
+        self.cMask = torch.Tensor(1, 128, 1, 1)
+        self.cMask.fill_(self.scale)
+        self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.training = True
+        self.fc1 = nn.Linear(7 * 7 * 128, 1024)
+        self.fc2 = nn.Linear(1024, 10)
+
+    def gap(self):
+        pass
+
+    def wrs(self):
+        pass
 
 
