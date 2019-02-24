@@ -2,3 +2,4 @@ data/*
 *.pyc
 /.idea
 /model
+/model1

@@ -108,8 +108,8 @@ class StigmergyNet(nn.Module):
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = self.pool1(x)
-        # self._stigmergy()
-        self._dropout()
+        self._stigmergy()
+        # self._dropout()
         x = x * self.cMask
         x = F.relu(self.conv2(x))
         x = self.pool2(x)
@@ -127,10 +127,10 @@ class StigmergyNet(nn.Module):
         p = self.p
         dim = 128
         if self.training:
-            self.cMask.fill_(1.)
+            self.cMask.fill_(0.)
             # 随机选择一半特征图置0
             index = torch.randperm(dim)[:int(dim * p)]
-            self.cMask[:, index, :, :] = 0.
+            self.cMask[:, index, :, :] = 1.
             # print(self.cMask.view(128))
         else:
             self.cMask.fill_(p)
