@@ -95,7 +95,7 @@ def train(r=None):
             count += size
             correct_count += accuracy(outputs, b_y).item()
             if (i + 1) % 15 == 0:
-                net.test()
+                net.train(mode=False)
                 acc = validate(net, validate_loader, use_cuda)
                 print('[ %d-%d ] loss: %.9f, \n'
                       'training accuracy: %.6f, \n'
@@ -104,7 +104,7 @@ def train(r=None):
                 tacc_save.append(correct_count / count)
                 loss_save.append(running_loss / count)
                 vacc_save.append(acc)
-                net.train()
+                net.train(mode=True)
         if (epoch + 1) % 1 == 0:
             print("save")
             torch.save(net.state_dict(), './model/stigmergy_net_{}_rate_{}.p'.format(epoch + 1, dr))

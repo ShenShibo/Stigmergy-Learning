@@ -119,9 +119,6 @@ class StigmergyNet(nn.Module):
 
         return F.softmax(out, dim=1)
 
-    def test(self):
-        self.training = False
-
     def _dropout(self):
         assert self.p > 0. and self.p < 1.
         p = self.p
@@ -179,6 +176,8 @@ class WCDNetwork(nn.Module):
         super(WCDNetwork, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+
         self.scale = 1.
         self.cMask = torch.Tensor(1, 128, 1, 1)
         self.cMask.fill_(self.scale)
@@ -188,10 +187,77 @@ class WCDNetwork(nn.Module):
         self.fc1 = nn.Linear(7 * 7 * 128, 1024)
         self.fc2 = nn.Linear(1024, 10)
 
-    def gap(self):
-        pass
 
-    def wrs(self):
-        pass
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = self.pool1(x)
+        if self.training:
+            b, c, _, _ = x.size()
+            y = self.avgpool(x).view(b, c)
+            # 简单将一个batch的图按通道求和
+            score = y.sum(dim=0)
+            iscore = 1. / score
+            key = torch.pow(torch.rand(c), iscore)
+            index = torch.argsort(key, descending=True)[:128 // 2]
+            alpha = score.sum() // score[index].sum()
+            self.cMask.fill_(0.)
+            self.cMask[:, index, :, :] = alpha
+        else:
+            self.cMask.fill_(1.)
+
+        x = x * self.cMask
+
+        x = F.relu(self.conv2(x))
+        x = self.pool2(x)
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        out = F.relu(self.fc2(x))
+
+        return F.softmax(out, dim=1)
+
+
+    def cuda(self, device=None):
+        # self.state_value = self.state_value.cuda(device=device)
+        self.cMask = self.cMask.cuda(device=device)
+        return self._apply(lambda t: t.cuda(device))
+
+class SEnet(nn.Module):
+    def __init__(self):
+        super(SEnet, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.SEblock = nn.Sequential(
+            nn.Linear(128, 128 // 16, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(128 // 16, 128, bias=False),
+            nn.Sigmoid()
+        )
+        # self.scale = 1.
+        # self.cMask = torch.Tensor(1, 128, 1, 1)
+        # self.cMask.fill_(self.scale)
+        self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.training = True
+        self.fc1 = nn.Linear(7 * 7 * 128, 1024)
+        self.fc2 = nn.Linear(1024, 10)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = self.pool1(x)
+        # SEblock
+        b, c, _, _ = x.size()
+        y = self.avgpool(x).view(b, c)
+        y = self.SEblock(y).view(b, c, 1, 1)
+        x = x * y.expand_as(x)
+
+        x = F.relu(self.conv2(x))
+        x = self.pool2(x)
+
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        out = F.relu(self.fc2(x))
+
+        return F.softmax(out, dim=1)
 
 
