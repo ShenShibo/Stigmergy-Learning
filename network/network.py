@@ -2,7 +2,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
-from torch._jit_internal import weak_script_method, weak_module
 # LeNet
 class NaiveNet(nn.Module):
     def __init__(self, is_BN=False):
@@ -195,11 +194,12 @@ class WCDNetwork(nn.Module):
             b, c, _, _ = x.size()
             y = self.avgpool(x).view(b, c)
             # 简单将一个batch的图按通道求和
+            M = 64
             score = y.sum(dim=0)
-            iscore = 1. / score
-            key = torch.pow(torch.rand(c), iscore)
-            index = torch.argsort(key, descending=True)[:128 // 2]
-            alpha = score.sum() // score[index].sum()
+            re_score = 1. / score
+            key = torch.pow(torch.rand(c), re_score)
+            index = torch.argsort(key, descending=True)[:M]
+            alpha = score.sum() / score[index].sum()
             self.cMask.fill_(0.)
             self.cMask[:, index, :, :] = alpha
         else:
