@@ -103,7 +103,9 @@ def train(r=0.5):
                 print('[ %d-%d ] loss: %.9f, \n'
                       'training accuracy: %.6f, \n'
                       'validating accuracy: %.6f' % (
-                      epoch + 1, i + 1, running_loss / count, correct_count / count, acc))
+                      epoch + 1, i + 1, running_loss / count,
+                      correct_count / count,
+                      acc))
                 tacc_save.append(correct_count / count)
                 loss_save.append(running_loss / count)
                 vacc_save.append(acc)
