@@ -156,7 +156,7 @@ class StigmergyNet(nn.Module):
             # 减去中值(也可以减去均值)
             influence_values = self.scale * ((influence_values).exp() - median)
             # 乘以掩码，去掉未参与通道数
-            influence_values = self.cMask.view(128) * influence_values
+            influence_values = self.cMask.view(dim) * influence_values
             self.state_value = F.softmax(self.state_value + influence_values, dim=0)
             # 升序排列，排列好的数值在原先tensor中的索引
             index = torch.argsort(self.state_value, descending=True)[:end]
