@@ -45,7 +45,7 @@ def train(r=0.5):
     dr = 0.05
     print("dropout rate equals {}".format(dr))
     net = StigmergyNet(p=dr)
-    name_net = "stigmergy"
+    name_net = "stigmergy_.05"
     # net = WCDNetwork()
     # net = SEnet()
     # net = DropoutNet(p=0.5)

@@ -94,7 +94,7 @@ class StigmergyNet(nn.Module):
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.scale = 1.
         self.cMask = torch.Tensor(1, 128, 1, 1)
-        self.cMask.fill_(self.scale)
+        self.cMask.fill_(1.)
         self.state_value = torch.ones(128)
         self.state_value = F.softmax(self.state_value, dim=0)
         self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
@@ -133,6 +133,7 @@ class StigmergyNet(nn.Module):
 
     def _stigmergy(self):
         dim = 128
+        eta = 0.9
         assert self.p > 0. and self.p < 1.
         p = self.p
         if self.training is False:
@@ -157,9 +158,12 @@ class StigmergyNet(nn.Module):
             influence_values = self.scale * ((influence_values).exp() - median)
             # 乘以掩码，去掉未参与通道数
             influence_values = self.cMask.view(dim) * influence_values
-            self.state_value = F.softmax(self.state_value + influence_values, dim=0)
+            influence_values[influence_values > 0.] = 1./512
+            influence_values[influence_values < 0.] = -1./512
+            self.state_value = eta * self.state_value + influence_values
             # 升序排列，排列好的数值在原先tensor中的索引
             index = torch.argsort(self.state_value, descending=True)[:end]
+            print(index)
             # 生成掩码
             self.cMask.fill_(0.)
             self.cMask[:, index, :, :] = 1.
