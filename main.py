@@ -34,7 +34,7 @@ def validate(net, loader, use_cuda=False):
     return acc
 
 
-def train(r=None):
+def train(r=0.5):
     assert r is not None
     use_cuda = True
     if torch.cuda.is_available() is False:
@@ -42,9 +42,11 @@ def train(r=None):
     torch.cuda.set_device(1)
     # 网络声明
     # net = NaiveNet(is_BN=False)
-    dr = r
-    print("dropout rate equals {}".format(dr))
-    net = StigmergyNet(p=dr)
+    # dr = r
+    # print("dropout rate equals {}".format(dr))
+    # net = StigmergyNet(p=dr)
+    net = WCDNetwork()
+    # net = SEnet()
     # net = DropoutNet(p=0.5)
     if use_cuda:
         net = net.cuda()
@@ -107,16 +109,14 @@ def train(r=None):
                 net.train(mode=True)
         if (epoch + 1) % 1 == 0:
             print("save")
-            torch.save(net.state_dict(), './model/stigmergy_net_{}_rate_{}.p'.format(epoch + 1, dr))
+            torch.save(net.state_dict(), './model/WCD_net_{}.p'.format(epoch + 1))
     dic = {}
     dic['loss'] = loss_save
     dic['training_accuracy'] = tacc_save
     dic['validating_accuracy'] = vacc_save
-    with open('./model/record_stigmergy_rate_{}.p'.format(dr), 'wb') as f:
+    with open('./model/record_WCD_net.p', 'wb') as f:
         pickle.dump(dic, f)
 
 
 if __name__ == "__main__":
-    interval = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    for r in interval:
-        train(r)
+    train()

@@ -186,27 +186,11 @@ class WCDNetwork(nn.Module):
         self.fc1 = nn.Linear(7 * 7 * 128, 1024)
         self.fc2 = nn.Linear(1024, 10)
 
-
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = self.pool1(x)
-        if self.training:
-            b, c, _, _ = x.size()
-            y = self.avgpool(x).view(b, c)
-            # 简单将一个batch的图按通道求和
-            M = 64
-            score = y.sum(dim=0)
-            re_score = 1. / score
-            key = torch.pow(torch.rand(c), re_score)
-            index = torch.argsort(key, descending=True)[:M]
-            alpha = score.sum() / score[index].sum()
-            self.cMask.fill_(0.)
-            self.cMask[:, index, :, :] = alpha
-        else:
-            self.cMask.fill_(1.)
-
+        self.mask(x.clone())
         x = x * self.cMask
-
         x = F.relu(self.conv2(x))
         x = self.pool2(x)
         x = x.view(x.size(0), -1)
@@ -215,14 +199,31 @@ class WCDNetwork(nn.Module):
 
         return F.softmax(out, dim=1)
 
+    def mask(self, x):
+
+        if self.training is False:
+            self.cMask.fill_(1.)
+            return
+        b, c, _, _ = x.size()
+        score = torch.mean(x, dim=(0, 2, 3))
+        # 简单将一个batch的图按通道求和
+        M = 64
+        re_score = 1. / (score + 0.000000001)
+        key = torch.pow(torch.rand(c).cuda(), re_score)
+        index = torch.argsort(key, descending=True)[:M]
+        alpha = score.sum() / score[index].sum()
+        self.cMask.fill_(0.)
+        self.cMask[:, index, :, :] = alpha.data
 
     def cuda(self, device=None):
         # self.state_value = self.state_value.cuda(device=device)
         self.cMask = self.cMask.cuda(device=device)
         return self._apply(lambda t: t.cuda(device))
 
+
 class SEnet(nn.Module):
     def __init__(self):
+        print("SEnet!")
         super(SEnet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
