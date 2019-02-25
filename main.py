@@ -42,10 +42,11 @@ def train(r=0.5):
     torch.cuda.set_device(1)
     # 网络声明
     # net = NaiveNet(is_BN=False)
-    # dr = r
-    # print("dropout rate equals {}".format(dr))
-    # net = StigmergyNet(p=dr)
-    net = WCDNetwork()
+    dr = 0.05
+    print("dropout rate equals {}".format(dr))
+    net = StigmergyNet(p=dr)
+    name_net = "stigmergy"
+    # net = WCDNetwork()
     # net = SEnet()
     # net = DropoutNet(p=0.5)
     if use_cuda:
@@ -107,14 +108,14 @@ def train(r=0.5):
                 loss_save.append(running_loss / count)
                 vacc_save.append(acc)
                 net.train(mode=True)
-        if (epoch + 1) % 1 == 0:
-            print("save")
-            torch.save(net.state_dict(), './model/WCD_net_{}.p'.format(epoch + 1))
+        # if (epoch + 1) % 1 == 0:
+        #     print("save")
+        #     torch.save(net.state_dict(), './model/WCD_net_{}.p'.format(epoch + 1))
     dic = {}
     dic['loss'] = loss_save
     dic['training_accuracy'] = tacc_save
     dic['validating_accuracy'] = vacc_save
-    with open('./model/record_WCD_net.p', 'wb') as f:
+    with open('./model/record_{}_net.p'.format(name_net), 'wb') as f:
         pickle.dump(dic, f)
 
 
