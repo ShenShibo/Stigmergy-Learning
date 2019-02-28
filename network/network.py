@@ -2,6 +2,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
+from collections import OrderedDict
 # LeNet
 class NaiveNet(nn.Module):
     def __init__(self, is_BN=False):
@@ -264,5 +265,106 @@ class SEnet(nn.Module):
         out = F.relu(self.fc2(x))
 
         return F.softmax(out, dim=1)
+
+def conv3x3(in_planes, out_planes, stride=1):
+    """3x3 convolution with padding"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False)
+
+class Vgg16(nn.Module):
+    def __init__(self):
+        super(Vgg16, self).__init__()
+        # input channels : 3
+        # output channels : 64
+        # channel size : 32x32
+        self.stage1 = nn.Sequential(OrderedDict([
+            ('conv1', conv3x3(3, 64)),
+            ('bn1', nn.BatchNorm2d(64)),
+            ('relu1', nn.ReLU()),
+            ('conv2', conv3x3(64, 64)),
+            ('bn2', nn.BatchNorm2d(64)),
+            ('relu2', nn.ReLU())
+        ]))
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # input channels : 64
+        # output channels : 128
+        # channel size : 16x16
+        self.stage2 = nn.Sequential(OrderedDict([
+            ('conv3', conv3x3(64, 128)),
+            ('bn3', nn.BatchNorm2d(128)),
+            ('relu3', nn.ReLU()),
+            ('conv4', conv3x3(128, 128)),
+            ('bn4', nn.BatchNorm2d(128)),
+            ('relu4', nn.ReLU())
+        ]))
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # input channels : 128
+        # output channels : 256
+        # channel size : 8x8
+        self.stage3 = nn.Sequential(OrderedDict([
+            ('conv5', conv3x3(128, 256)),
+            ('bn5', nn.BatchNorm2d(256)),
+            ('relu5', nn.ReLU()),
+            ('conv6', conv3x3(256, 256)),
+            ('bn6', nn.BatchNorm2d(256)),
+            ('relu6', nn.ReLU()),
+            ('conv7', conv3x3(256, 256)),
+            ('bn7', nn.BatchNorm2d(256)),
+            ('relu7', nn.ReLU()),
+        ]))
+        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # input channels : 256
+        # output channels : 512
+        # channel size : 4x4
+        self.stage4 = nn.Sequential(OrderedDict([
+            ('conv8', conv3x3(256, 512)),
+            ('bn8', nn.BatchNorm2d(512)),
+            ('relu8', nn.ReLU()),
+            ('conv9', conv3x3(512, 512)),
+            ('bn9', nn.BatchNorm2d(512)),
+            ('relu9', nn.ReLU()),
+            ('conv10', conv3x3(512, 512)),
+            ('bn10', nn.BatchNorm2d(512)),
+            ('relu10', nn.ReLU())
+        ]))
+        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # input channels : 512
+        # output channels : 512
+        # channel size : 2x2
+        self.stage5 = nn.Sequential(OrderedDict([
+            ('conv11', conv3x3(512, 512)),
+            ('bn11', nn.BatchNorm2d(512)),
+            ('relu11', nn.ReLU()),
+            ('conv12', conv3x3(512, 512)),
+            ('bn12', nn.BatchNorm2d(512)),
+            ('relu12', nn.ReLU()),
+            ('conv13', conv3x3(512, 512)),
+            ('bn13', nn.BatchNorm2d(512)),
+            ('relu13', nn.ReLU())
+        ]))
+        self.fc1 = nn.Linear(in_features=2*2*512, out_features=512)
+        self.fc2 = nn.Linear(in_features=512, out_features=10)
+
+    def forward(self, x):
+
+        x = self.stage1(x)
+        x = self.pool1(x)
+
+        x = self.stage2(x)
+        x = self.pool2(x)
+
+        x = self.stage3(x)
+        x = self.pool3(x)
+
+        x = self.stage4(x)
+        x = self.pool4(x)
+
+        x = self.stage5(x)
+        x = x.view(x.size(0), -1)
+
+        x = F.relu(self.fc1(x))
+        out = F.relu(self.fc2(x))
+        return F.softmax(out,dim=1)
+
 
 

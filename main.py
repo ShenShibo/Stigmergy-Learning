@@ -42,31 +42,35 @@ def train(r=0.5):
     torch.cuda.set_device(1)
     # 网络声明
     # net = NaiveNet(is_BN=False)
-    dr = 0.05
-    print("dropout rate equals {}".format(dr))
-    net = StigmergyNet(p=dr)
-    name_net = "stigmergy_.05"
-    # net = WCDNetwork()
-    # net = SEnet()
-    # net = DropoutNet(p=0.5)
+    # dr = 0.05
+    # print("dropout rate equals {}".format(dr))
+    net = Vgg16()
+    name_net = "Vgg16_cifar10_pure"
     if use_cuda:
         net = net.cuda()
     # 超参数设置
-    epochs = 20
+    epochs = 60
     lr = 0.1
-    batch_size = 64
+    batch_size = 128
     # 参数设置
     criterion = nn.CrossEntropyLoss()
     # 自定义优化器
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0., weight_decay=0.)
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=0.0005)
     optimizer.zero_grad()
-    lr_scheduler = StepLR(optimizer, step_size=16, gamma=0.1)
+    lr_scheduler = StepLR(optimizer, step_size=25, gamma=0.1)
     # 数据读入
-    train_data, train_label, validate_data, validate_label = data_load()
+    # train_data, train_label, validate_data, validate_label = data_load()
+    train_data, train_label, validate_data, validate_label = cifar_load(path_list=['data_batch_1',
+                                                                                   'data_batch_2',
+                                                                                   'data_batch_3',
+                                                                                   'data_batch_4',
+                                                                                   'data_batch_5'])
     # 生成数据集
-    train_set = MnistDataSet(train_data, train_label)
+    # train_set = MnistDataSet(train_data, train_label)
+    train_set = CifarDataSet(train_data, train_label)
     train_loader = DataLoader(train_set, batch_size, shuffle=True)
-    val_set = MnistDataSet(validate_data, validate_label)
+    # val_set = MnistDataSet(validate_data, validate_label)
+    val_set = CifarDataSet(validate_data, validate_label)
     validate_loader = DataLoader(val_set, batch_size=128)
     # 开始训练
     loss_save = []
@@ -97,7 +101,7 @@ def train(r=0.5):
             running_loss += loss.item()
             count += size
             correct_count += accuracy(outputs, b_y).item()
-            if (i + 1) % 15 == 0:
+            if (i + 1) % 30 == 0:
                 net.train(mode=False)
                 acc = validate(net, validate_loader, use_cuda)
                 print('[ %d-%d ] loss: %.9f, \n'
@@ -110,14 +114,14 @@ def train(r=0.5):
                 loss_save.append(running_loss / count)
                 vacc_save.append(acc)
                 net.train(mode=True)
-        # if (epoch + 1) % 1 == 0:
-        #     print("save")
-        #     torch.save(net.state_dict(), './model/WCD_net_{}.p'.format(epoch + 1))
+        if (epoch + 1) % 5 == 0:
+            print("save")
+            torch.save(net.state_dict(), './model/{}_{}.p'.format(name_net, epoch + 1))
     dic = {}
     dic['loss'] = loss_save
     dic['training_accuracy'] = tacc_save
     dic['validating_accuracy'] = vacc_save
-    with open('./model/record_{}_net.p'.format(name_net), 'wb') as f:
+    with open('./model/record_{}.p'.format(name_net), 'wb') as f:
         pickle.dump(dic, f)
 
 
