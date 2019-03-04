@@ -50,14 +50,15 @@ def train(r=0.5):
         net = net.cuda()
     # 超参数设置
     epochs = 60
-    lr = 0.9
+    lr = 0.1
     batch_size = 128
+
     # 参数设置
     criterion = nn.CrossEntropyLoss()
     # 自定义优化器
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=0.00001)
     optimizer.zero_grad()
-    lr_scheduler = StepLR(optimizer, step_size=25, gamma=0.1)
+    lr_scheduler = StepLR(optimizer, step_size=20, gamma=0.1)
     # 数据读入
     # train_data, train_label, validate_data, validate_label = data_load()
     train_data, train_label, validate_data, validate_label = cifar_load(path_list=['data_batch_1',
