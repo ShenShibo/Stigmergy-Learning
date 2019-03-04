@@ -344,6 +344,14 @@ class Vgg16(nn.Module):
         ]))
         self.fc1 = nn.Linear(in_features=2*2*512, out_features=512)
         self.fc2 = nn.Linear(in_features=512, out_features=10)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight.data)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.bias.data.zero_()
 
     def forward(self, x):
 
