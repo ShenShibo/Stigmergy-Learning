@@ -59,11 +59,12 @@ def cifar_load(path_list = []):
     for l in path_list:
         print(l)
         with open('./data/cifar-10-python/{}'.format(l), 'rb') as f:
-            samples = pickle.load(f)
+
+            samples = pickle.load(f, encoding='bytes')
             data = []
             # raw_img = np.zeros((32, 32, 3), dtype=np.uint8)
             val = []
-            for i, d in enumerate(samples['data']):
+            for i, d in enumerate(samples[b'data']):
                 # 随机采样，平移
                 r = np.reshape(d[:length], (32, 32))
                 g = np.reshape(d[length:2 * length], (32, 32))
@@ -144,9 +145,9 @@ def cifar_load(path_list = []):
                 # data.append(noise)
 
             data = np.array(data)
-            labels = np.array(samples['labels'][:9000]).repeat(7)
+            labels = np.array(samples[b'labels'][:9000]).repeat(7)
             val = np.array(val)
-            vlabels = np.array(samples['labels'][-1000:])
+            vlabels = np.array(samples[b'labels'][-1000:])
         if l == 'data_batch_1':
             train_data = data.copy()
             train_label = labels.copy()
@@ -162,6 +163,7 @@ def cifar_load(path_list = []):
         print(val_data.shape)
         print(val_label.shape)
     return train_data, train_label, val_data, val_label
+
 
 class CifarDataSet(Dataset):
     def __init__(self, data, labels):

@@ -360,6 +360,7 @@ class Vgg16(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
+
     def forward(self, x):
 
         x = self.stage1(x)
