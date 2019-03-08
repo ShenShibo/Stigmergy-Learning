@@ -171,6 +171,10 @@ class CifarDataSet(Dataset):
         self.data = data.astype(np.float32)
         self.label = labels
         self.data /= 255.
+        mean_rgb = np.array([0.4914, 0.4822, 0.4465])
+        std_rgb = np.array([0.2023, 0.1994, 0.2010])
+        for i in range(3):
+            self.data[:,i,:,:] = (self.data[:,i,:,:] - mean_rgb[i]) / std_rgb[i]
         print("Done!")
 
     def __getitem__(self, item):

@@ -51,11 +51,11 @@ def train(r=0.5):
     # 超参数设置
     epochs = 60
     lr = 0.1
-    batch_size = 128
+    batch_size = 64
     # 参数设置
     criterion = nn.CrossEntropyLoss()
     # 自定义优化器
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=0.0005)
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     optimizer.zero_grad()
     lr_scheduler = StepLR(optimizer, step_size=25, gamma=0.1)
     # 数据读入
@@ -68,10 +68,13 @@ def train(r=0.5):
     # 生成数据集
     # train_set = MnistDataSet(train_data, train_label)
     train_set = CifarDataSet(train_data, train_label)
-    train_loader = DataLoader(train_set, batch_size, shuffle=True)
+    train_loader = DataLoader(train_set,
+                              batch_size=batch_size,
+                              shuffle=True,
+                              )
     # val_set = MnistDataSet(validate_data, validate_label)
     val_set = CifarDataSet(validate_data, validate_label)
-    validate_loader = DataLoader(val_set, batch_size=128)
+    validate_loader = DataLoader(val_set, batch_size=256)
     # 开始训练
     loss_save = []
     tacc_save = []
@@ -101,7 +104,7 @@ def train(r=0.5):
             running_loss += loss.item()
             count += size
             correct_count += accuracy(outputs, b_y).item()
-            if (i + 1) % 30 == 0:
+            if (i + 1) % 50 == 0:
                 net.train(mode=False)
                 acc = validate(net, validate_loader, use_cuda)
                 print('[ %d-%d ] loss: %.9f, \n'
