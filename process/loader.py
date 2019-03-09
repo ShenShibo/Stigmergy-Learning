@@ -50,7 +50,8 @@ class MnistDataSet(Dataset):
     def __len__(self):
         return self.data.shape[0]
 
-def cifar_load(path_list = []):
+
+def cifar_load(path_list=[], training=True):
     length = 32 * 32
     train_data = None
     train_label = None
@@ -59,7 +60,6 @@ def cifar_load(path_list = []):
     for l in path_list:
         print(l)
         with open('./data/cifar-10-python/{}'.format(l), 'rb') as f:
-
             samples = pickle.load(f, encoding='bytes')
             data = []
             # raw_img = np.zeros((32, 32, 3), dtype=np.uint8)
@@ -69,7 +69,7 @@ def cifar_load(path_list = []):
                 r = np.reshape(d[:length], (32, 32))
                 g = np.reshape(d[length:2 * length], (32, 32))
                 b = np.reshape(d[-length:], (32, 32))
-                raw = np.array([b, g, r], dtype=np.uint8)
+                raw = np.array([r, g, b], dtype=np.uint8)
                 if i >= 9000:
                     val.append(raw)
                     continue
@@ -165,6 +165,22 @@ def cifar_load(path_list = []):
     return train_data, train_label, val_data, val_label
 
 
+def cifar_load_test(path=None):
+    length = 32 * 32
+    with open('./data/cifar-10-python/{}'.format(path), 'rb') as f:
+        samples = pickle.load(f, encoding='bytes')
+        data = []
+        for i, d in enumerate(samples[b'data']):
+            # 随机采样，平移
+            r = np.reshape(d[:length], (32, 32))
+            g = np.reshape(d[length:2 * length], (32, 32))
+            b = np.reshape(d[-length:], (32, 32))
+            data.append(np.array([r, g, b], dtype=np.uint8))
+        data = np.array(data)
+        labels = np.array(samples[b'labels'])
+    return data, labels
+
+
 class CifarDataSet(Dataset):
     def __init__(self, data, labels):
         super(CifarDataSet, self).__init__()
@@ -173,6 +189,10 @@ class CifarDataSet(Dataset):
         self.data = data.astype(np.float32)
         self.label = labels
         self.data /= 255.
+        mean_rgb = np.array([0.4914, 0.4822, 0.4465])
+        std_rgb = np.array([0.2023, 0.1994, 0.2010])
+        for i in range(3):
+            self.data[:, i, :, :] = (self.data[:, i, :, :] - mean_rgb[i]) / std_rgb[i]
         print("Done!")
 
     def __getitem__(self, item):

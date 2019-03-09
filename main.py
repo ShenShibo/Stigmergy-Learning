@@ -6,7 +6,7 @@ from torch.autograd import Variable
 from torch.optim.lr_scheduler import StepLR
 import pickle
 import torch
-
+import argparse
 
 def accuracy(outputs, labels):
     _, predicted = torch.max(outputs.data, 1)
@@ -52,13 +52,10 @@ def train(r=0.5):
     epochs = 60
     lr = 0.1
     batch_size = 128
-
     # 参数设置
     criterion = nn.CrossEntropyLoss()
     # 自定义优化器
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=0.00001)
-    optimizer.zero_grad()
-    lr_scheduler = StepLR(optimizer, step_size=20, gamma=0.1)
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     # 数据读入
     # train_data, train_label, validate_data, validate_label = data_load()
     train_data, train_label, validate_data, validate_label = cifar_load(path_list=['data_batch_1',
@@ -69,19 +66,25 @@ def train(r=0.5):
     # 生成数据集
     # train_set = MnistDataSet(train_data, train_label)
     train_set = CifarDataSet(train_data, train_label)
-    train_loader = DataLoader(train_set, batch_size, shuffle=True)
+    train_loader = DataLoader(train_set,
+                              batch_size=batch_size,
+                              shuffle=True,
+                              )
     # val_set = MnistDataSet(validate_data, validate_label)
     val_set = CifarDataSet(validate_data, validate_label)
-    validate_loader = DataLoader(val_set, batch_size=128)
+    validate_loader = DataLoader(val_set, batch_size=256)
     # 开始训练
     loss_save = []
     tacc_save = []
     vacc_save = []
     for epoch in range(epochs):
-        lr_scheduler.step()
         running_loss = 0.0
         correct_count = 0.
         count = 0
+        if epoch == 30 or epoch == 45 or epoch == 54:
+            lr *= 0.1
+            optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
+            optimizer.param_groups['lr'] = lr
         for i, (b_x, b_y) in enumerate(train_loader):
             size = b_x.shape[0]
             b_x = Variable(b_x)
@@ -126,5 +129,20 @@ def train(r=0.5):
         pickle.dump(dic, f)
 
 
+def test():
+    torch.cuda.set_device(0)
+    use_cuda = True
+    net = Vgg16()
+    with open('./model/Vgg16_cifar10_pure_60.p', 'rb') as f:
+        net.load_state_dict(torch.load(f))
+    test_data, test_labels = cifar_load_test('test_batch')
+    test_set = CifarDataSet(test_data, test_labels)
+    loader = DataLoader(test_set, batch_size=256)
+    acc = validate(net, loader, use_cuda=use_cuda)
+    print("testing accuracy : {}".format(acc))
+    return
+
 if __name__ == "__main__":
-    train()
+
+    # train()
+    test()

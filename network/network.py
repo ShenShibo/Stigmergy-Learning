@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 from collections import OrderedDict
+import math
+
 # LeNet
 class NaiveNet(nn.Module):
     def __init__(self, is_BN=False):
@@ -342,16 +344,22 @@ class Vgg16(nn.Module):
             ('bn13', nn.BatchNorm2d(512)),
             ('relu13', nn.ReLU())
         ]))
-        self.fc1 = nn.Linear(in_features=2*2*512, out_features=512)
-        self.fc2 = nn.Linear(in_features=512, out_features=10)
-        # for m in self.modules():
-        #     if isinstance(m, nn.Conv2d):
-        #         nn.init.kaiming_normal_(m.weight.data)
-        #     elif isinstance(m, nn.BatchNorm2d):
-        #         m.weight.data.fill_(1)
-        #         m.bias.data.zero_()
-        #     elif isinstance(m, nn.Linear):
-        #         m.bias.data.zero_()
+        self.fc1 = nn.Linear(in_features=2*2*512, out_features=10)
+        # self.fc2 = nn.Linear(in_features=512, out_features=10)
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(0.5)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
+
 
     def forward(self, x):
 
@@ -370,9 +378,9 @@ class Vgg16(nn.Module):
         x = self.stage5(x)
         x = x.view(x.size(0), -1)
 
-        x = F.relu(self.fc1(x))
-        out = F.relu(self.fc2(x))
-        return F.softmax(out,dim=1)
+        # x = F.relu(self.fc1(x))
+        out = F.relu(self.fc1(x))
+        return F.softmax(out, dim=1)
 
 
 
