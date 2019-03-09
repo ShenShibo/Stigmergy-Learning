@@ -45,7 +45,7 @@ def train(args=None):
     # 超参数设置
     epochs = args.epochs
     lr = args.lr
-    batch_size = args.bn
+    batch_size = args.bz
     # 误差函数设置
     criterion = nn.CrossEntropyLoss()
     # 优化器设置
@@ -126,7 +126,7 @@ def test(args=None):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', type=str, help='training or testing')
+    parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
     parser.add_argument('--epochs', type=int, help="training epochs", default=100)
     parser.add_argument('--bz', type=int, help='batch size', default=128)
