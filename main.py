@@ -21,8 +21,6 @@ def validate(net, loader, use_cuda=False):
         net = net.cuda()
     for i, (b_x, b_y) in enumerate(loader, 0):
         size = b_x.shape[0]
-        b_x = Variable(b_x)
-        b_y = Variable(b_y)
         if use_cuda:
             b_x = b_x.cuda()
             b_y = b_y.cuda()
@@ -34,46 +32,34 @@ def validate(net, loader, use_cuda=False):
     return acc
 
 
-def train(r=0.5):
-    assert r is not None
-    use_cuda = True
-    if torch.cuda.is_available() is False:
-        use_cuda = False
-    torch.cuda.set_device(1)
-    # 网络声明
-    # net = NaiveNet(is_BN=False)
-    # dr = 0.05
-    # print("dropout rate equals {}".format(dr))
-    net = Vgg16()
-    name_net = "Vgg16_cifar10_pure"
+def train(args=None):
+    assert args is not None
+    use_cuda = torch.cuda.is_available() and args.cuda
+    # network declaration
+    if args.network == 'Vgg':
+        net = Vgg16()
+        name_net = "Vgg16_cifar10_pure"
     if use_cuda:
+        torch.cuda.set_device(1)
         net = net.cuda()
     # 超参数设置
-    epochs = 60
-    lr = 0.1
-
-    batch_size = 128
-
-    # 参数设置
+    epochs = args.epochs
+    lr = args.lr
+    batch_size = args.bn
+    # 误差函数设置
     criterion = nn.CrossEntropyLoss()
-    # 自定义优化器
+    # 优化器设置
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
-
+    lr_scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
     # 数据读入
-    # train_data, train_label, validate_data, validate_label = data_load()
     train_data, train_label, validate_data, validate_label = cifar_load(path_list=['data_batch_1',
                                                                                    'data_batch_2',
                                                                                    'data_batch_3',
                                                                                    'data_batch_4',
                                                                                    'data_batch_5'])
     # 生成数据集
-    # train_set = MnistDataSet(train_data, train_label)
     train_set = CifarDataSet(train_data, train_label)
-    train_loader = DataLoader(train_set,
-                              batch_size=batch_size,
-                              shuffle=True,
-                              )
-    # val_set = MnistDataSet(validate_data, validate_label)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     val_set = CifarDataSet(validate_data, validate_label)
     validate_loader = DataLoader(val_set, batch_size=256)
     # 开始训练
@@ -84,26 +70,17 @@ def train(r=0.5):
         running_loss = 0.0
         correct_count = 0.
         count = 0
-        if epoch == 30 or epoch == 45 or epoch == 54:
-            lr *= 0.1
-            optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
-            optimizer.param_groups['lr'] = lr
+        lr_scheduler.step()
         for i, (b_x, b_y) in enumerate(train_loader):
             size = b_x.shape[0]
-            b_x = Variable(b_x)
-            b_y = Variable(b_y)
             if use_cuda:
                 b_x = b_x.cuda()
                 b_y = b_y.cuda()
-            #
-            # optimizer.zero_grad()
             outputs = net(b_x)
-
             optimizer.zero_grad()
             loss = criterion(outputs, b_y)
             loss.backward()
             optimizer.step()
-
             # 计算loss
             running_loss += loss.item()
             count += size
@@ -131,12 +108,13 @@ def train(r=0.5):
     with open('./model/record_{}.p'.format(name_net), 'wb') as f:
         pickle.dump(dic, f)
 
-
-def test():
-    torch.cuda.set_device(0)
+def test(args=None):
+    assert args is not None
+    torch.cuda.set_device(args.cuda_device)
     use_cuda = True
-    net = Vgg16()
-    with open('./model/Vgg16_cifar10_pure_60.p', 'rb') as f:
+    if args.network == "Vgg":
+        net = Vgg16()
+    with open('./model/{}'.format(args.model), 'rb') as f:
         net.load_state_dict(torch.load(f))
     test_data, test_labels = cifar_load_test('test_batch')
     test_set = CifarDataSet(test_data, test_labels)
@@ -147,5 +125,18 @@ def test():
 
 if __name__ == "__main__":
 
-    # train()
-    test()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', type=str, help='training or testing')
+    parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
+    parser.add_argument('--epochs', type=int, help="training epochs", default=100)
+    parser.add_argument('--bz', type=int, help='batch size', default=128)
+    parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
+    parser.add_argument('--cuda', type=bool, help='GPU', default=True)
+    parser.add_argument('--cuda_device', type=int, default=0)
+    parser.add_argument('--network', type=str, default='Vgg')
+    parser.add_argument('--model', type=str, default='Vgg16_cifar10_pure_60.p')
+    args = parser.parse_args()
+    if args.mode == 'train':
+        train(args)
+    else:
+        test(args)

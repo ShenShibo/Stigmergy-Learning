@@ -93,7 +93,7 @@ def cifar_load(path_list=[], training=True):
                 temp_b = np.concatenate((temp_b, padding2), axis=1)
                 temp_b = np.concatenate((padding2, temp_b), axis=1)
 
-                for j in range(4):
+                for j in range(2):
                     rd_x = random.randint(16, 20)
                     rd_y = random.randint(16, 20)
                     if rd_x == 18 and rd_y == 18:
@@ -108,44 +108,8 @@ def cifar_load(path_list=[], training=True):
                 rotation2 = raw[:, :, ::-1]
                 data.append(rotation1)
                 data.append(rotation2)
-                # 尺度
-                # up_scale = 1.1
-                # up_sample = np.zeros((3, 32, 32), dtype=np.uint8)
-                # down_sample = np.zeros((3, 32, 32), dtype=np.uint8)
-                # down_scale = 0.9
-                # temp = cv2.resize(raw_img,
-                #                   (0, 0),
-                #                   fx=up_scale,
-                #                   fy=up_scale,
-                #                   interpolation=cv2.INTER_CUBIC)
-                # for k in range(3):
-                #     up_sample[k,:,:] = temp[
-                #                 temp.shape[1]/2-16:temp.shape[1]/2+16,
-                #                 temp.shape[0]/2-16:temp.shape[0]/2+16,
-                #                 k]
-                #
-                # temp = cv2.resize(raw_img, (0, 0), fx=down_scale, fy=down_scale)
-                # for k in range(3):
-                #     down_sample[
-                #     k,
-                #     16-(temp.shape[1]+1)/2:16+temp.shape[1]/2,
-                #     16-(temp.shape[0]+1)/2:16+temp.shape[0]/2] = temp[:,:,k]
-                # data.append(up_sample)
-                # data.append(down_sample)
-                # # 加椒盐噪声
-                # noise = raw.copy()
-                # for k in range(25):
-                #     rx = random.randint(0, 31)
-                #     ry = random.randint(0, 31)
-                #     noise[:, rx, ry] = [255, 255, 255]
-                # for k in range(25):
-                #     rx = random.randint(0, 31)
-                #     ry = random.randint(0, 31)
-                #     noise[:, rx, ry] = [0, 0, 0]
-                # data.append(noise)
-
             data = np.array(data)
-            labels = np.array(samples[b'labels'][:9000]).repeat(7)
+            labels = np.array(samples[b'labels'][:9000]).repeat(5)
             val = np.array(val)
             vlabels = np.array(samples[b'labels'][-1000:])
         if l == 'data_batch_1':
@@ -167,6 +131,7 @@ def cifar_load(path_list=[], training=True):
 
 def cifar_load_test(path=None):
     length = 32 * 32
+    print(path)
     with open('./data/cifar-10-python/{}'.format(path), 'rb') as f:
         samples = pickle.load(f, encoding='bytes')
         data = []

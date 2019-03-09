@@ -344,8 +344,8 @@ class Vgg16(nn.Module):
             ('bn13', nn.BatchNorm2d(512)),
             ('relu13', nn.ReLU())
         ]))
-        self.fc1 = nn.Linear(in_features=2*2*512, out_features=10)
-        # self.fc2 = nn.Linear(in_features=512, out_features=10)
+        self.pool5 = nn.AvgPool2d(kernel_size=2, stride=1)
+        self.fc1 = nn.Linear(in_features=512, out_features=10)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -376,9 +376,9 @@ class Vgg16(nn.Module):
         x = self.pool4(x)
 
         x = self.stage5(x)
+        x = self.pool5(x)
         x = x.view(x.size(0), -1)
 
-        # x = F.relu(self.fc1(x))
         out = F.relu(self.fc1(x))
         return F.softmax(out, dim=1)
 
