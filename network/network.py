@@ -398,18 +398,24 @@ class MaskConv2d(nn.Conv2d):
         # filter mask
         self.fMask = torch.Tensor(in_channels, out_channels//groups, 1, 1)
         self.p = p
+
     def forward(self, input):
-        self.fMask = torch.rand(self.in_channels, self.out_channels, 1, 1).cuda()
-        self.fMask = self.fMask >= self.p
-        return F.conv2d(input, self.weight * self.fMask, self.bias, self.stride,
-                         self.padding, self.dilation, self.groups)
+        if self.training is True:
+            self.fMask = torch.rand(self.out_channels, self.in_channels, 1, 1)
+            self.fMask[self.fMask > self.p] = 1.
+            self.fMask[self.fMask <= self.p] = 0.
+            return F.conv2d(input, self.weight * self.fMask, self.bias, self.stride,
+                             self.padding, self.dilation, self.groups)
+        else:
+            return F.conv2d(input, self.weight * self.fMask, self.bias, self.stride,
+                             self.padding, self.dilation, self.groups)
 
 class MNISTNet(nn.Module):
     def __init__(self):
         super(MNISTNet, self).__init__()
         self.conv1 = MaskConv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.conv2 = MaskConv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.training = True
         self.fc1 = nn.Linear(7 * 7 * 128, 1024)
