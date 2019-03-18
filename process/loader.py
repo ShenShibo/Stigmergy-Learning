@@ -70,9 +70,9 @@ def cifar_load(path_list=[], training=True):
                 g = np.reshape(d[length:2 * length], (32, 32))
                 b = np.reshape(d[-length:], (32, 32))
                 raw = np.array([r, g, b], dtype=np.uint8)
-                if i >= 9000:
-                    val.append(raw)
-                    continue
+                # if i >= 9000:
+                #     val.append(raw)
+                #     continue
                 # 原始数据
                 data.append(raw)
                 padding1 = np.zeros((2, 32), dtype=np.uint8)
@@ -93,7 +93,7 @@ def cifar_load(path_list=[], training=True):
                 temp_b = np.concatenate((temp_b, padding2), axis=1)
                 temp_b = np.concatenate((padding2, temp_b), axis=1)
 
-                for j in range(2):
+                for j in range(4):
                     rd_x = random.randint(16, 20)
                     rd_y = random.randint(16, 20)
                     if rd_x == 18 and rd_y == 18:
@@ -109,23 +109,24 @@ def cifar_load(path_list=[], training=True):
                 data.append(rotation1)
                 data.append(rotation2)
             data = np.array(data)
-            labels = np.array(samples[b'labels'][:9000]).repeat(5)
-            val = np.array(val)
-            vlabels = np.array(samples[b'labels'][-1000:])
+            # labels = np.array(samples[b'labels'][:9000]).repeat(7)
+            labels = np.array(samples[b'labels']).repeat(7)
+            # val = np.array(val)
+            # vlabels = np.array(samples[b'labels'][-1000:])
         if l == 'data_batch_1':
             train_data = data.copy()
             train_label = labels.copy()
-            val_data = val.copy()
-            val_label = vlabels.copy()
+            # val_data = val.copy()
+            # val_label = vlabels.copy()
         else:
             train_data = np.concatenate((train_data, data), axis=0)
             train_label = np.concatenate((train_label, labels), axis=0)
-            val_data = np.concatenate((val_data, val), axis=0)
-            val_label = np.concatenate((val_label, vlabels), axis=0)
+            # val_data = np.concatenate((val_data, val), axis=0)
+            # val_label = np.concatenate((val_label, vlabels), axis=0)
         print(train_data.shape)
         print(train_label.shape)
-        print(val_data.shape)
-        print(val_label.shape)
+        # print(val_data.shape)
+        # print(val_label.shape)
     return train_data, train_label, val_data, val_label
 
 
@@ -157,9 +158,7 @@ class CifarDataSet(Dataset):
         mean_rgb = np.array([0.4914, 0.4822, 0.4465])
         std_rgb = np.array([0.2023, 0.1994, 0.2010])
         for i in range(3):
-
             self.data[:, i, :, :] = (self.data[:, i, :, :] - mean_rgb[i]) / std_rgb[i]
-
         print("Done!")
 
     def __getitem__(self, item):

@@ -273,6 +273,7 @@ def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
+
 class Vgg16(nn.Module):
     def __init__(self):
         super(Vgg16, self).__init__()
@@ -344,7 +345,8 @@ class Vgg16(nn.Module):
             ('bn13', nn.BatchNorm2d(512)),
             ('relu13', nn.ReLU())
         ]))
-        self.pool5 = nn.AvgPool2d(kernel_size=2, stride=1)
+        self.pool5 = nn.MaxPool2d(kernel_size=2)
+        # self.fc1 = nn.Linear(in_features=2 * 2 * 512, out_features=512)
         self.fc1 = nn.Linear(in_features=512, out_features=10)
 
         for m in self.modules():
@@ -357,12 +359,10 @@ class Vgg16(nn.Module):
                 m.weight.data.fill_(0.5)
                 m.bias.data.zero_()
             elif isinstance(m, nn.Linear):
-                m.weight.data.normal_(0, 0.01)
+                m.weight.data.normal_(0, 0.1)
                 m.bias.data.zero_()
 
-
     def forward(self, x):
-
         x = self.stage1(x)
         x = self.pool1(x)
 
@@ -380,7 +380,7 @@ class Vgg16(nn.Module):
         x = x.view(x.size(0), -1)
 
         out = F.relu(self.fc1(x))
-        return F.softmax(out, dim=1)
+        return out
 
 
 
