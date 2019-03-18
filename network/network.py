@@ -407,7 +407,7 @@ class MaskConv2d(nn.Conv2d):
             return F.conv2d(input, self.weight * self.fMask, self.bias, self.stride,
                              self.padding, self.dilation, self.groups)
         else:
-            return F.conv2d(input, self.weight * self.fMask, self.bias, self.stride,
+            return F.conv2d(input, self.weight, self.bias, self.stride,
                              self.padding, self.dilation, self.groups)
 
 class MNISTNet(nn.Module):
