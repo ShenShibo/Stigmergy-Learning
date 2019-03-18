@@ -139,11 +139,90 @@ def test(args=None):
     return
 
 
+def mtrain(args=None):
+    assert args is not None
+    use_cuda = torch.cuda.is_available() and args.cuda
+    # network declaration
+    net = MNISTNet()
+    name_net = 'MCONV_MNIST'
+    if use_cuda:
+        torch.cuda.set_device(args.cuda_device)
+        net = net.cuda()
+    # 超参数设置
+    epochs = args.epochs
+    lr = args.lr
+    batch_size = args.bz
+    # 误差函数设置
+    criterion = nn.CrossEntropyLoss()
+    # 优化器设置
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=args.wd)
+    lr_scheduler = MultiStepLR(optimizer, milestones=[args.epochs // 2, 3 * args.epochs // 4], gamma=0.1)
+    # 数据读入
+    train_data, train_label, validate_data, validate_label = data_load()
+    # 生成数据集
+    train_set = MnistDataSet(train_data, train_label)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    val_set = MnistDataSet(validate_data, validate_label)
+    validate_loader = DataLoader(val_set, batch_size=256)
+    # 开始训练
+    loss_save = []
+    tacc_save = []
+    vacc_save = []
+    best_acc = 0.
+    dic = {}
+    for epoch in range(args.start_epoch, epochs):
+        running_loss = 0.0
+        correct_count = 0.
+        count = 0
+        lr_scheduler.step()
+        for i, (b_x, b_y) in enumerate(train_loader):
+            size = b_x.shape[0]
+            if use_cuda:
+                b_x = b_x.cuda()
+                b_y = b_y.cuda()
+            b_x = Variable(b_x)
+            b_y = Variable(b_y)
+            outputs = net(b_x)
+            optimizer.zero_grad()
+            loss = criterion(outputs, b_y)
+            loss.backward()
+            optimizer.step()
+            # 计算loss
+            running_loss += loss.item()
+            count += size
+            correct_count += accuracy(outputs, b_y).item()
+            if (i + 1) % 30 == 0:
+                print('[ %d-%d ] loss: %.9f, \n'
+                      'training accuracy: %.6f' % (
+                      epoch + 1, i + 1, running_loss / count,
+                      correct_count / count))
+                tacc_save.append(correct_count / count)
+                loss_save.append(running_loss / count)
+                net.train(mode=False)
+                acc = validate(net, validate_loader, use_cuda)
+                print('[ %d-%d]\n'
+                      'validating accuracy: %.6f' % (epoch+1, i+1, acc))
+                vacc_save.append(acc)
+                if acc > best_acc:
+                    best_acc = acc
+                    dic['best_model'] = net.state_dict()
+                net.train(mode=True)
+        # if (epoch + 1) % 5 == 0 or epoch == 0:
+        #     print("save")
+        #     torch.save(net.state_dict(), './model/{}_{}.p'.format(name_net, epoch + 1))
+    dic['loss'] = loss_save
+    dic['training_accuracy'] = tacc_save
+    dic['validating_accuracy'] = vacc_save
+    with open('./model/record_{}.p'.format(name_net), 'wb') as f:
+        pickle.dump(dic, f)
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
-    parser.add_argument('--lr', type=float, help='initial learning rate', default=0.01)
-    parser.add_argument('--epochs', type=int, help="training epochs", default=150)
+    parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
+    parser.add_argument('--epochs', type=int, help="training epochs", default=50)
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
@@ -153,9 +232,12 @@ if __name__ == "__main__":
     parser.add_argument('--pretrained', type=bool, default=True)
     parser.add_argument('--pre_model', type=str, default='Vgg16_init.p')
     parser.add_argument('--start_epoch', type=int, default=0)
+    # parser.add_argument('--data_set', type=str, default='cifar10')
 
     args = parser.parse_args()
     if args.mode == 'train':
         train(args)
+    elif args.mode == 'mtrain':
+        mtrain(args)
     else:
         test(args)

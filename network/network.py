@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch
 from collections import OrderedDict
 import math
+from torch._jit_internal import weak_module
 
 # LeNet
 class NaiveNet(nn.Module):
@@ -383,4 +384,47 @@ class Vgg16(nn.Module):
         return out
 
 
+class MaskConv2d(nn.Conv2d):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1,
+                 padding=0, dilation=1, groups=1, bias=True, p=0.5):
+        super(MaskConv2d, self).__init__(in_channels,
+                                         out_channels,
+                                         kernel_size,
+                                         stride=stride,
+                                         padding=padding,
+                                         dilation=dilation,
+                                         groups=groups,
+                                         bias=bias)
+        # filter mask
+        self.fMask = torch.Tensor(in_channels, out_channels//groups, 1, 1)
+        self.p = p
+    def forward(self, input):
+        self.fMask = torch.rand(self.in_channels, self.out_channels, 1, 1).cuda()
+        self.fMask = self.fMask >= self.p
+        return F.conv2d(input, self.weight * self.fMask, self.bias, self.stride,
+                         self.padding, self.dilation, self.groups)
+
+class MNISTNet(nn.Module):
+    def __init__(self):
+        super(MNISTNet, self).__init__()
+        self.conv1 = MaskConv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.training = True
+        self.fc1 = nn.Linear(7 * 7 * 128, 1024)
+        self.fc2 = nn.Linear(1024, 10)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = self.pool1(x)
+
+        x = F.relu(self.conv2(x))
+        x = self.pool2(x)
+
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        out = F.relu(self.fc2(x))
+
+        return out
 
