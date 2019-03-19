@@ -7,6 +7,9 @@ from torch.optim.lr_scheduler import MultiStepLR
 import pickle
 import torch
 import argparse
+import torchvision.transforms as transforms
+from torchvision.datasets.cifar import CIFAR10 as dataset
+
 
 def accuracy(outputs, labels):
     _, predicted = torch.max(outputs.data, 1)
@@ -57,17 +60,24 @@ def train(args=None):
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=args.wd)
     lr_scheduler = MultiStepLR(optimizer, milestones=[75, 125], gamma=0.1)
     # 数据读入
-    train_data, train_label, _, _ = cifar_load(path_list=['data_batch_1',
-                                                                                   'data_batch_2',
-                                                                                   'data_batch_3',
-                                                                                   'data_batch_4',
-                                                                                   'data_batch_5'])
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
     # 生成数据集
-    validate_data, validate_label = cifar_load_test('test_batch')
-    train_set = CifarDataSet(train_data, train_label)
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    val_set = CifarDataSet(validate_data, validate_label)
-    validate_loader = DataLoader(val_set, batch_size=256)
+    train_set = dataset(root='./data/cifar-10-python', train=True, download=False, transform=transform_train)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=args.workers)
+    val_set = dataset(root='./data/cifar-10-python', train=False, download=False, transform=transform_test)
+    validate_loader = DataLoader(val_set, batch_size=256, shuffle=False, num_workers=args.workers)
+
     # 开始训练
     loss_save = []
     tacc_save = []
@@ -232,6 +242,8 @@ if __name__ == "__main__":
     parser.add_argument('--pretrained', type=bool, default=True)
     parser.add_argument('--pre_model', type=str, default='Vgg16_init.p')
     parser.add_argument('--start_epoch', type=int, default=0)
+    parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
+                        help='number of data loading workers (default: 8)')
     # parser.add_argument('--data_set', type=str, default='cifar10')
 
     args = parser.parse_args()
