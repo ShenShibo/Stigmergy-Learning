@@ -40,8 +40,8 @@ def train(args=None):
     use_cuda = torch.cuda.is_available() and args.cuda
     # network declaration
     if args.network == 'Vgg':
-        net = Vgg16()
-        name_net = "Vgg16_cifar10_pure_0.1"
+        net = VGG()
+        name_net = "Vgg16_cifar10_pure"
     else:
         return
     if args.pretrained:
@@ -58,7 +58,7 @@ def train(args=None):
     criterion = nn.CrossEntropyLoss()
     # 优化器设置
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=args.wd)
-    lr_scheduler = MultiStepLR(optimizer, milestones=[75, 125], gamma=0.1)
+    lr_scheduler = MultiStepLR(optimizer, milestones=[args.epochs // 2, 3 * args.epochs // 4], gamma=0.1)
     # 数据读入
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
@@ -121,7 +121,7 @@ def train(args=None):
             best_acc = acc
             dic['best_model'] = net.state_dict()
         net.train(mode=True)
-        if (epoch + 1) % 5 == 0 or epoch == 0:
+        if (epoch + 1) % 10 == 0 or epoch == 0:
             print("save")
             torch.save(net.state_dict(), './model/{}_{}.p'.format(name_net, epoch + 1))
     dic['loss'] = loss_save
