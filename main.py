@@ -73,9 +73,9 @@ def train(args=None):
     ])
 
     # 生成数据集
-    train_set = dataset(root='./data/cifar-10-python', train=True, download=False, transform=transform_train)
+    train_set = dataset(root='./data', train=True, download=False, transform=transform_train)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=args.workers)
-    val_set = dataset(root='./data/cifar-10-python', train=False, download=False, transform=transform_test)
+    val_set = dataset(root='./data', train=False, download=False, transform=transform_test)
     validate_loader = DataLoader(val_set, batch_size=256, shuffle=False, num_workers=args.workers)
 
     # 开始训练
@@ -232,14 +232,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.01)
-    parser.add_argument('--epochs', type=int, help="training epochs", default=50)
+    parser.add_argument('--epochs', type=int, help="training epochs", default=150)
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
     parser.add_argument('--cuda_device', type=int, default=1)
     parser.add_argument('--network', type=str, default='Vgg')
     parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_pure.p')
-    parser.add_argument('--pretrained', type=bool, default=True)
+    parser.add_argument('--pretrained', type=bool, default=False)
     parser.add_argument('--pre_model', type=str, default='Vgg16_init.p')
     parser.add_argument('--start_epoch', type=int, default=0)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
