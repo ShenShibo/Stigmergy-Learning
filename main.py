@@ -201,22 +201,22 @@ def mtrain(args=None):
             running_loss += loss.item()
             count += size
             correct_count += accuracy(outputs, b_y).item()
-            if (i + 1) % 30 == 0:
-                print('[ %d-%d ] loss: %.9f, \n'
-                      'training accuracy: %.6f' % (
-                      epoch + 1, i + 1, running_loss / count,
-                      correct_count / count))
-                tacc_save.append(correct_count / count)
-                loss_save.append(running_loss / count)
+            if (i + 1) % 50 == 0:
                 net.train(mode=False)
                 acc = validate(net, validate_loader, use_cuda)
-                print('[ %d-%d]\n'
-                      'validating accuracy: %.6f' % (epoch+1, i+1, acc))
                 vacc_save.append(acc)
                 if acc > best_acc:
                     best_acc = acc
                     dic['best_model'] = net.state_dict()
                 net.train(mode=True)
+                print('[ %d-%d ] loss: %.9f, \n'
+                      'training accuracy: %.6f \n'
+                      'validating accuracy: %.6f' % (
+                      epoch + 1, i + 1, running_loss / count,
+                      correct_count / count,
+                      acc))
+                tacc_save.append(correct_count / count)
+                loss_save.append(running_loss / count)
         # if (epoch + 1) % 5 == 0 or epoch == 0:
         #     print("save")
         #     torch.save(net.state_dict(), './model/{}_{}.p'.format(name_net, epoch + 1))
@@ -231,12 +231,12 @@ def mtrain(args=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
-    parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
+    parser.add_argument('--lr', type=float, help='initial learning rate', default=0.01)
     parser.add_argument('--epochs', type=int, help="training epochs", default=50)
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
-    parser.add_argument('--cuda', type=bool, help='GPU', default=False)
-    parser.add_argument('--cuda_device', type=int, default=0)
+    parser.add_argument('--cuda', type=bool, help='GPU', default=True)
+    parser.add_argument('--cuda_device', type=int, default=1)
     parser.add_argument('--network', type=str, default='Vgg')
     parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_pure.p')
     parser.add_argument('--pretrained', type=bool, default=True)

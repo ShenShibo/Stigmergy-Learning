@@ -396,20 +396,18 @@ class MaskConv2d(nn.Conv2d):
                                          groups=groups,
                                          bias=bias)
         # filter mask
-        self.fMask = torch.Tensor(in_channels, out_channels//groups, 1, 1)
+        self.fMask = torch.Tensor(in_channels, out_channels//groups, 1, 1).cuda()
         self.p = p
 
     def forward(self, input):
         if self.training is True:
-            self.fMask = torch.rand(self.out_channels, self.in_channels, 1, 1)
+            self.fMask = torch.rand(self.out_channels, self.in_channels, 1, 1).cuda()
             self.fMask[self.fMask > self.p] = 1.
             self.fMask[self.fMask <= self.p] = 0.
-            return F.conv2d(input, self.weight * self.fMask, self.bias, self.stride,
-                             self.padding, self.dilation, self.groups)
         else:
             self.fMask.fill_(self.p)
-            return F.conv2d(input, self.fMask * self.weight, self.bias, self.stride,
-                             self.padding, self.dilation, self.groups)
+        return F.conv2d(input, self.fMask * self.weight, self.bias, self.stride,
+                        self.padding, self.dilation, self.groups)
 
 class MNISTNet(nn.Module):
     def __init__(self):
