@@ -278,7 +278,7 @@ def conv3x3(in_planes, out_planes, stride=1):
 
 class MaskConv2d(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
-                 padding=0, dilation=1, groups=1, bias=True, p=0.5):
+                 padding=0, dilation=1, groups=1, bias=True, p=0.5, device=0):
         super(MaskConv2d, self).__init__(in_channels,
                                          out_channels,
                                          kernel_size,
@@ -288,18 +288,19 @@ class MaskConv2d(nn.Conv2d):
                                          groups=groups,
                                          bias=bias)
         # filter mask
-        self.fMask = torch.Tensor(in_channels, out_channels//groups, 1, 1).cuda()
+        self.fMask = torch.Tensor(out_channels, in_channels//groups, 1, 1).cuda(device=device)
         self.p = p
 
     def forward(self, input):
         if self.training is True:
-            self.fMask = torch.rand(self.out_channels, self.in_channels, 1, 1).cuda()
-            self.fMask[self.fMask > self.p] = 0.
-            self.fMask[self.fMask <= self.p] = 1.
+            index = torch.rand(self.out_channels, self.in_channels, 1, 1)
+            self.fMask[index > self.p] = 0.
+            self.fMask[index <= self.p] = 1.
         else:
-            self.fMask.fill_(1.)
+            self.fMask.fill_(self.p)
         return F.conv2d(input, self.fMask * self.weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
+
 
 
 class MNISTNet(nn.Module):
@@ -364,11 +365,14 @@ class VGG(nn.Module):
     def _make_layers(self,cfg=[], bn=True):
         layers = []
         in_channels = 3
+        p = [0.9, 0.8, 0.7, 0.6, 0.5]
+        count = 0
         for v in cfg:
             if v == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+                count += 1
             else:
-                conv2d = MaskConv2d(in_channels, v, kernel_size=3, padding=1)
+                conv2d = MaskConv2d(in_channels, v, kernel_size=3, padding=1, p=p[count], device=1)
                 if bn:
                     layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
                 else:

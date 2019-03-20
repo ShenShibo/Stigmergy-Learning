@@ -121,7 +121,7 @@ def train(args=None):
             best_acc = acc
             dic['best_model'] = net.state_dict()
         net.train(mode=True)
-        if (epoch + 1) % 10 == 0 or epoch == 0:
+        if epoch == 0:
             print("save")
             torch.save(net.state_dict(), './model/{}_{}.p'.format(name_net, epoch + 1))
     dic['loss'] = loss_save
@@ -136,13 +136,18 @@ def test(args=None):
     torch.cuda.set_device(args.cuda_device)
     use_cuda = True
     if args.network == "Vgg":
-        net = Vgg16()
+        net = VGG()
     with open('./model/{}'.format(args.model), 'rb') as f:
         dic = pickle.load(f)
         net.load_state_dict(dic['best_model'])
-    test_data, test_labels = cifar_load_test('test_batch')
-    test_set = CifarDataSet(test_data, test_labels)
-    loader = DataLoader(test_set, batch_size=256)
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    val_set = dataset(root='./data', train=False, download=False, transform=transform_test)
+    loader = DataLoader(val_set, batch_size=256, shuffle=False, num_workers=args.workers)
+
     net.train(mode=False)
     acc = validate(net, loader, use_cuda=use_cuda)
     print("testing accuracy : {}".format(acc))
@@ -231,17 +236,17 @@ def mtrain(args=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
-    parser.add_argument('--lr', type=float, help='initial learning rate', default=0.01)
+    parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
     parser.add_argument('--epochs', type=int, help="training epochs", default=150)
-    parser.add_argument('--bz', type=int, help='batch size', default=64)
+    parser.add_argument('--bz', type=int, help='batch size', default=128)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
     parser.add_argument('--cuda_device', type=int, default=1)
     parser.add_argument('--network', type=str, default='Vgg')
-    parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_pure.p')
-    parser.add_argument('--pretrained', type=bool, default=False)
-    parser.add_argument('--pre_model', type=str, default='Vgg16_init.p')
-    parser.add_argument('--start_epoch', type=int, default=0)
+    parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_D.p')
+    parser.add_argument('--pretrained', type=bool, default=True)
+    parser.add_argument('--pre_model', type=str, default='Vgg16_cifar10_init.p')
+    parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     # parser.add_argument('--data_set', type=str, default='cifar10')
