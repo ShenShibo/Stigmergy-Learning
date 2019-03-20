@@ -328,17 +328,18 @@ class MNISTNet(nn.Module):
         return out
 
 cfg = {
-        'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
-        'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
-        'D': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
-        'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
+    'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'D': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
+    'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
     }
 
 class VGG(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, epsilon=1e-7):
         super(VGG, self).__init__()
         self.feature = self._make_layers(cfg['D'], bn=True)
         self.classifier = nn.Linear(512, num_classes)
+        self.epsilon = epsilon
         self._initialize_weights()
 
     def forward(self, x):
@@ -379,3 +380,11 @@ class VGG(nn.Module):
                     layers += [conv2d, nn.ReLU(inplace=True)]
                 in_channels = v
         return nn.Sequential(*layers)
+
+    def sparsity_penalty(self):
+        for m in self.modules():
+            if isinstance(m, MaskConv2d):
+                temp_norm = torch.norm(m.weight.data, dim=(2, 3))
+                temp_norm = temp_norm.unsqueeze(dim=2)
+                temp_norm = temp_norm.unsqueeze(dim=3)
+                m.weight.grad.data.add_(self.epsilon * m.weight.data / temp_norm.expand_as(m.weight.data))
