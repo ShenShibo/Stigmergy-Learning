@@ -402,8 +402,8 @@ class MaskConv2d(nn.Conv2d):
     def forward(self, input):
         if self.training is True:
             self.fMask = torch.rand(self.out_channels, self.in_channels, 1, 1).cuda()
-            self.fMask[self.fMask > self.p] = 1.
-            self.fMask[self.fMask <= self.p] = 0.
+            self.fMask[self.fMask > self.p] = 0.
+            self.fMask[self.fMask <= self.p] = 1.
         else:
             self.fMask.fill_(self.p)
         return F.conv2d(input, self.fMask * self.weight, self.bias, self.stride,
@@ -432,7 +432,6 @@ class MNISTNet(nn.Module):
         out = F.relu(self.fc2(x))
 
         return out
-
 
 cfg = {
         'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
