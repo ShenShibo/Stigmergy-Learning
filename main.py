@@ -240,7 +240,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
-    parser.add_argument('--epsilon', type=float, default=1e-4)
+    parser.add_argument('--epsilon', type=float, default=1e-6)
     parser.add_argument('--epochs', type=int, help="training epochs", default=150)
     parser.add_argument('--bz', type=int, help='batch size', default=128)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
