@@ -11,6 +11,7 @@ import torchvision.transforms as transforms
 from torchvision.datasets.cifar import CIFAR10 as dataset
 import copy
 
+
 def accuracy(outputs, labels):
     _, predicted = torch.max(outputs.data, 1)
     correct = (predicted == labels.data).sum()
@@ -40,7 +41,7 @@ def train(args=None):
     use_cuda = torch.cuda.is_available() and args.cuda
     # network declaration
     if args.network == 'Vgg':
-        net = VGG()
+        net = VGG(epsilon=args.epsilon)
     else:
         return
     name_net = args.name
@@ -239,20 +240,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
+    parser.add_argument('--epsilon', type=float, default=1e-6)
     parser.add_argument('--epochs', type=int, help="training epochs", default=150)
     parser.add_argument('--bz', type=int, help='batch size', default=128)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
     parser.add_argument('-cuda_device', type=int, default=1)
     parser.add_argument('--network', type=str, default='Vgg')
-    parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_pure.p')
+    parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_0.9-0.5.p')
     parser.add_argument('--pretrained', type=bool, default=True)
     parser.add_argument('--pre_model', type=str, default='Vgg16_cifar10_init.p')
     parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('-sparsity', type=bool, default=False)
-    parser.add_argument('-name', type=bool, default='VGG16-cifar10')
+    parser.add_argument('-name', type=str, default='VGG16-cifar10-sparsity')
     # parser.add_argument('--data_set', type=str, default='cifar10')
 
     args = parser.parse_args()

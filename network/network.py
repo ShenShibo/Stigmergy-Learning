@@ -363,10 +363,10 @@ class VGG(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
-    def _make_layers(self,cfg=[], bn=True):
+    def _make_layers(self, cfg=[], bn=True):
         layers = []
         in_channels = 3
-        p = [0.9, 0.8, 0.7, 0.6, 0.5]
+        p = [1., 1., 1., 1., 1.]
         count = 0
         for v in cfg:
             if v == 'M':
