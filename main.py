@@ -41,9 +41,9 @@ def train(args=None):
     # network declaration
     if args.network == 'Vgg':
         net = VGG()
-        name_net = "Vgg16_cifar10_pure"
     else:
         return
+    name_net = args.name
     if args.pretrained:
         with open('./model/{}'.format(args.pre_model), 'rb') as f:
             net.load_state_dict(torch.load(f))
@@ -100,6 +100,8 @@ def train(args=None):
             optimizer.zero_grad()
             loss = criterion(outputs, b_y)
             loss.backward()
+            if args.sparsity:
+                net.sparsity_penalty()
             optimizer.step()
             # 计算loss
             running_loss += loss.item()
@@ -241,14 +243,16 @@ if __name__ == "__main__":
     parser.add_argument('--bz', type=int, help='batch size', default=128)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
-    parser.add_argument('--cuda_device', type=int, default=1)
+    parser.add_argument('-cuda_device', type=int, default=1)
     parser.add_argument('--network', type=str, default='Vgg')
-    parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_0.9-0.5.p')
+    parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_pure.p')
     parser.add_argument('--pretrained', type=bool, default=True)
     parser.add_argument('--pre_model', type=str, default='Vgg16_cifar10_init.p')
     parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
+    parser.add_argument('-sparsity', type=bool, default=False)
+    parser.add_argument('-name', type=bool, default='VGG16-cifar10')
     # parser.add_argument('--data_set', type=str, default='cifar10')
 
     args = parser.parse_args()
