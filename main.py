@@ -9,7 +9,7 @@ import torch
 import argparse
 import torchvision.transforms as transforms
 from torchvision.datasets.cifar import CIFAR10 as dataset
-
+import copy
 
 def accuracy(outputs, labels):
     _, predicted = torch.max(outputs.data, 1)
@@ -121,7 +121,7 @@ def train(args=None):
         vacc_save.append(acc)
         if acc > best_acc:
             best_acc = acc
-            dic['best_model'] = net.state_dict().copy()
+            dic['best_model'] = copy.deepcopy(net.state_dict())
         net.train(mode=True)
         if epoch == 0:
             print("save")
