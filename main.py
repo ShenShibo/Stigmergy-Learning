@@ -41,7 +41,7 @@ def train(args=None):
     use_cuda = torch.cuda.is_available() and args.cuda
     # network declaration
     if args.network == 'Vgg':
-        net = VGG(epsilon=args.epsilon)
+        net = VGG(epsilon=args.epsilon, method=2)
     else:
         return
     name_net = args.name
@@ -254,7 +254,7 @@ if __name__ == "__main__":
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('-sparsity', type=bool, default=False)
-    parser.add_argument('-name', type=str, default='VGG16-cifar10-sparsity')
+    parser.add_argument('-name', type=str, default='VGG16-cifar10-parameter')
     # parser.add_argument('--data_set', type=str, default='cifar10')
 
     args = parser.parse_args()

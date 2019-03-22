@@ -5,6 +5,7 @@ import torch
 from collections import OrderedDict
 import math
 from torch._jit_internal import weak_module
+from torch.nn.parameter import Parameter
 
 # LeNet
 class NaiveNet(nn.Module):
@@ -274,8 +275,7 @@ def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
-
-
+# dropout
 class MaskConv2d(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1, bias=True, p=0.5, device=0):
@@ -287,8 +287,7 @@ class MaskConv2d(nn.Conv2d):
                                          dilation=dilation,
                                          groups=groups,
                                          bias=bias)
-        # filter mask
-        self.fMask = torch.Tensor(out_channels, in_channels//groups, 1, 1).cuda(device=device)
+        self.fMask = torch.Tensor(out_channels, in_channels // groups, 1, 1).cuda(device=device)
         self.p = p
 
     def forward(self, input):
@@ -300,6 +299,28 @@ class MaskConv2d(nn.Conv2d):
             self.fMask.fill_(self.p)
         return F.conv2d(input, self.fMask * self.weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
+# sparsity
+# standard conv2d
+
+# parameter
+class LmaskConv2d(nn.Conv2d):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1,
+                 padding=0, dilation=1, groups=1, bias=True):
+        super(LmaskConv2d, self).__init__(in_channels,
+                                         out_channels,
+                                         kernel_size,
+                                         stride=stride,
+                                         padding=padding,
+                                         dilation=dilation,
+                                         groups=groups,
+                                         bias=bias)
+        self.fMask = Parameter(torch.Tensor(out_channels, in_channels, 1, 1))
+        self.fMask.fill_(.5)
+
+    def forward(self, input):
+        return F.conv2d(input, self.fMask * self.weight, self.bias, self.stride,
+                        self.padding, self.dilation, self.groups)
+
 
 
 
@@ -335,8 +356,11 @@ cfg = {
     }
 
 class VGG(nn.Module):
-    def __init__(self, num_classes=10, epsilon=1e-7):
+    _method = ['dropout', 'sparsity', 'parameter', 'SE-block']
+    _p = [0.9, .8, .7, .6, .5]
+    def __init__(self, num_classes=10, epsilon=1e-7, method = 2):
         super(VGG, self).__init__()
+        self.method = self._method[method]
         self.feature = self._make_layers(cfg['D'], bn=True)
         self.classifier = nn.Linear(512, num_classes)
         self.epsilon = epsilon
@@ -350,7 +374,7 @@ class VGG(nn.Module):
 
     def _initialize_weights(self):
         for m in self.modules():
-            if isinstance(m, nn.Conv2d) or isinstance(m, MaskConv2d):
+            if isinstance(m, nn.Conv2d) or isinstance(m, MaskConv2d) or isinstance(m, LmaskConv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
                 if m.bias is not None:
@@ -366,14 +390,18 @@ class VGG(nn.Module):
     def _make_layers(self, cfg=[], bn=True):
         layers = []
         in_channels = 3
-        p = [1., 1., 1., 1., 1.]
         count = 0
         for v in cfg:
             if v == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
                 count += 1
             else:
-                conv2d = MaskConv2d(in_channels, v, kernel_size=3, padding=1, p=p[count], device=1)
+                if self.method == "dropout":
+                    conv2d = MaskConv2d(in_channels, v, kernel_size=3, padding=1, p=self._p[count], device=1)
+                elif self.method == "sparsity":
+                    conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+                elif self.method == "parameter":
+                    conv2d = LmaskConv2d(in_channels, v, kernel_size=3, padding=1)
                 if bn:
                     layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
                 else:
@@ -383,8 +411,10 @@ class VGG(nn.Module):
 
     def sparsity_penalty(self):
         for m in self.modules():
-            if isinstance(m, MaskConv2d):
+            if isinstance(m, nn.Conv2d):
                 temp_norm = torch.norm(m.weight.data, dim=(2, 3))
                 temp_norm = temp_norm.unsqueeze(dim=2)
                 temp_norm = temp_norm.unsqueeze(dim=3)
                 m.weight.grad.data.add_(self.epsilon * m.weight.data / temp_norm.expand_as(m.weight.data))
+            elif isinstance(m, LmaskConv2d):
+                m.fMask.grad.data.add_(self.epsilon * torch.sign(m.fMask.data))
