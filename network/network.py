@@ -302,6 +302,7 @@ class MaskConv2d(nn.Conv2d):
 # sparsity
 # standard conv2d
 
+
 # parameter
 class LmaskConv2d(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
@@ -315,13 +316,11 @@ class LmaskConv2d(nn.Conv2d):
                                          groups=groups,
                                          bias=bias)
         self.fMask = Parameter(torch.Tensor(out_channels, in_channels, 1, 1))
-        self.fMask.fill_(.5)
+        self.fMask.data.fill_(.5)
 
     def forward(self, input):
         return F.conv2d(input, self.fMask * self.weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
-
-
 
 
 class MNISTNet(nn.Module):
@@ -348,6 +347,7 @@ class MNISTNet(nn.Module):
 
         return out
 
+
 cfg = {
     'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -355,9 +355,12 @@ cfg = {
     'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
     }
 
+
 class VGG(nn.Module):
+
     _method = ['dropout', 'sparsity', 'parameter', 'SE-block']
     _p = [0.9, .8, .7, .6, .5]
+
     def __init__(self, num_classes=10, epsilon=1e-7, method = 2):
         super(VGG, self).__init__()
         self.method = self._method[method]
@@ -416,5 +419,5 @@ class VGG(nn.Module):
                 temp_norm = temp_norm.unsqueeze(dim=2)
                 temp_norm = temp_norm.unsqueeze(dim=3)
                 m.weight.grad.data.add_(self.epsilon * m.weight.data / temp_norm.expand_as(m.weight.data))
-            elif isinstance(m, LmaskConv2d):
+            if isinstance(m, LmaskConv2d):
                 m.fMask.grad.data.add_(self.epsilon * torch.sign(m.fMask.data))
