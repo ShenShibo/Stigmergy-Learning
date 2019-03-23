@@ -9,7 +9,7 @@ record = "../model/record_VGG16-cifar10-parameter.p"
 
 with open(record, 'rb') as f:
     record = pickle.load(f)
-    net.load_state_dict(record['best_model'])
+    # net.load_state_dict(record['best_model'], map_location='cpu')
 
 count = 0
 for module in net.modules():
