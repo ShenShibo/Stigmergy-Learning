@@ -359,7 +359,7 @@ cfg = {
 class VGG(nn.Module):
 
     _method = ['dropout', 'sparsity', 'parameter', 'SE-block']
-    _p = [0.9, .8, .7, .6, .5]
+    _p = [.5, .5, .5, .5, .5]
 
     def __init__(self, num_classes=10, epsilon=1e-7, method = 2):
         super(VGG, self).__init__()
