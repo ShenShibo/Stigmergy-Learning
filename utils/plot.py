@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 
 net = VGG(method=0)
-record = "../model/record_Vgg16_cifar10_ALL0.5.p"
+record = "../model/record_VGG16-cifar10-sparsity.p"
 
 with open(record, 'rb') as f:
     record = pickle.load(f)
@@ -23,7 +23,6 @@ for module in net.modules():
         plt.ylabel('input channel')
         plt.imshow(X,
                    aspect='equal',
-                   interpolation='nearest',
                    cmap='hot',
                    origin='low')
         plt.colorbar()
@@ -40,7 +39,6 @@ for module in net.modules():
         plt.ylabel('input channel')
         plt.imshow(X,
                    aspect='equal',
-                   interpolation='nearest',
                    cmap='hot',
                    origin='low')
         plt.colorbar()
