@@ -421,3 +421,4 @@ class VGG(nn.Module):
                 m.weight.grad.data.add_(self.epsilon * m.weight.data / temp_norm.expand_as(m.weight.data))
             if isinstance(m, LmaskConv2d):
                 m.fMask.grad.data.add_(self.epsilon * torch.sign(m.fMask.data))
+
