@@ -91,17 +91,17 @@ class Svgg(nn.Module):
         count = 0
         flag = False
         # x = self.feature(x)
-        for m in self.feature.modules():
-
-            x = m(x)
+        x.requires_grad_()
+        for _, (_, m) in enumerate(self.feature._modules.items()):
             if iterations % self.update_round == 0 and self.training is True:
                 flag = True
                 if isinstance(m, DropConv2d):
                     x.register_hook(self.compute_rank)
-                    self.mask_stack.push(m)
+                    self.mask_stack.push(m.mask)
                     self.activation_stack.push(x)
                     self.layer_index_stack.push(count)
                     count += 1
+            x = m(x)
         x = x.view(x.size(0), -1)
         if flag is True:
             self.rounds += 1
@@ -126,14 +126,14 @@ class Svgg(nn.Module):
                     if i == j:
                         continue
                     else:
-                        self.distance_matrices[k][i][j] = (num / (num + 1)) *\
-                                                          self.distance_matrices[k][i][j] +\
+                        self.distance_matrices[k][i, j] = (num / (num + 1)) *\
+                                                          self.distance_matrices[k][i, j] +\
                                                           (1 / (num + 1)) *\
                                                           values[i] * values[j]
             values = (-self.distance_matrices[k]).exp().mm(values.unsqueeze(dim=1))
         # 状态值更新
         self.sv[k][mask > 0.] *= self.ksai
-        self.sv[k] = self.sv[k]+ (1-self.ksai) * values * mask
+        self.sv[k] = self.sv[k]+ (1-self.ksai) * values
 
     def cuda(self, device=None):
         DEVICE = torch.device('cuda:{}'.format(device))
@@ -167,9 +167,6 @@ class DropConv2d(nn.Conv2d):
             self.mask[index <= self.dr] = 0.
         else:
             self.mask.fill_(1-self.dr)
-        print(self.mask.size())
-        print(input.size())
-        print(self.weight.size())
         return F.conv2d(input * self.mask.expand_as(input), self.weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
 
