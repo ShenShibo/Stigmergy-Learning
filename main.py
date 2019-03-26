@@ -243,7 +243,7 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, help="training epochs", default=150)
     parser.add_argument('--bz', type=int, help='batch size', default=128)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
-    parser.add_argument('--cuda', type=bool, help='GPU', default=False)
+    parser.add_argument('--cuda', type=bool, help='GPU', default=True)
     parser.add_argument('-cuda_device', type=int, default=1)
     parser.add_argument('--network', type=str, default='Vgg')
     parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_0.9-0.5.p')
