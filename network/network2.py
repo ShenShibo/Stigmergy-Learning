@@ -33,10 +33,12 @@ class Stack():
 
 
 class Svgg(nn.Module):
-    _dr = [.1, .2, .3, .4, .5]
+    _dr = [.1, .1, .2, .2, .3, .3, .3, .4, .4, .4, .5, .5, .5]
     def __init__(self,
                  num_classes=10,
-                 ):
+                 update_round = 1,
+                 is_stigmergy=True,
+                 ksai = 0.9):
         super(Svgg, self).__init__()
         self.feature = self._make_layers(cfg['D'], bn=True)
         self.distance_matrices = []
@@ -46,10 +48,10 @@ class Svgg(nn.Module):
         self.activation_stack = Stack()
         self.mask_stack = Stack()
         self.layer_index_stack = Stack()
-        self.update_round = 1
-        self.stigmergy = True
-        self.ksai = 0.9
-        self.cuda_device = 1
+        self.update_round = update_round
+        self.stigmergy = is_stigmergy
+        self.ksai = ksai
+        self.rounds = 0
 
     def _make_layers(self, cfg=[], bn=True):
         layers = []
@@ -58,11 +60,11 @@ class Svgg(nn.Module):
         for v in cfg:
             if v == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-                count += 1
             else:
-                self.distance_matrices.append(torch.zeros(in_channels, in_channels).cuda(device=self.cuda_device))
-                self.sv.append(torch.zeros(in_channels).cuda(device=self.cuda_device))
-                conv2d = DropConv2d(in_channels, v, kernel_size=3, padding=1, dr=self._dr[count], device=self.cuda_device)
+                self.distance_matrices.append(torch.zeros(in_channels, in_channels))
+                self.sv.append(torch.zeros(in_channels))
+                conv2d = DropConv2d(in_channels, v, kernel_size=3, padding=1, dr=self._dr[count])
+                count += 1
                 if bn:
                     layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
                 else:
@@ -87,15 +89,19 @@ class Svgg(nn.Module):
 
     def forward(self, x, iterations):
         count = 0
+        flag = False
         for m in self.feature.modules():
             x = m(x)
-            if iterations % self.update_round == 0:
+            if iterations % self.update_round == 0 and self.training is True:
+                flag = True
                 if isinstance(m, DropConv2d):
                     x.register_hook(self.compute_rank)
                     self.mask_stack.push(m)
                     self.activation_stack.push(x)
                     self.layer_index_stack.push(count)
                     count += 1
+        if flag is True:
+            self.rounds += 1
         return self.classifier(x)
 
     def compute_rank(self, grad):
@@ -109,6 +115,7 @@ class Svgg(nn.Module):
         values = torch.sum(temp, dim=0) / (b * h * w)
         # 对更新量进行量l2正则化
         values /= torch.norm(values)
+        num = (1-self._dr[k]) ** 2 * self.rounds
         if self.stigmergy:
             index = (mask > 0).nonzero()
             for i in index:
@@ -116,14 +123,25 @@ class Svgg(nn.Module):
                     if i == j:
                         continue
                     else:
-                        self.distance_matrices[k][i][j] = self.ksai * self.distance_matrices[k][i][j] +\
-                                                          (1-self.ksai) * values[i] * values[j]
+                        self.distance_matrices[k][i][j] = (num / (num + 1)) *\
+                                                          self.distance_matrices[k][i][j] +\
+                                                          (1 / (num + 1)) *\
+                                                          values[i] * values[j]
             values = (-self.distance_matrices[k]).exp().mm(values.unsqueeze(dim=1))
-        self.sv[k] += values * mask
+        # 状态值更新
+        self.sv[k][mask > 0.] *= self.ksai
+        self.sv[k] = self.sv[k]+ (1-self.ksai) * values * mask
+
+    def cuda(self, device=None):
+        for m, sv in zip(self.distance_matrices, self.sv):
+            m.cuda(device=device)
+            sv.cuda(device=device)
+        return self._apply(lambda t: t.cuda(device))
+
 
 class DropConv2d(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
-                 padding=0, dilation=1, groups=1, bias=True, dr=0.5, device=0):
+                 padding=0, dilation=1, groups=1, bias=True, dr=0.5):
         super(DropConv2d, self).__init__(in_channels,
                                          out_channels,
                                          kernel_size,
@@ -132,7 +150,7 @@ class DropConv2d(nn.Conv2d):
                                          dilation=dilation,
                                          groups=groups,
                                          bias=bias)
-        self.mask = torch.Tensor(1, in_channels // groups, 1, 1).cuda(device=device)
+        self.mask = torch.Tensor(1, in_channels // groups, 1, 1)
         self.dr = dr
 
     def forward(self, input):
@@ -142,5 +160,10 @@ class DropConv2d(nn.Conv2d):
             self.mask[index <= self.dr] = 0.
         else:
             self.mask.fill_(1-self.dr)
-        return F.conv2d(input * self.mask, self.weight, self.bias, self.stride,
+        return F.conv2d(input * self.mask.expand_as(input), self.weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
+
+    def cuda(self, device=None):
+        self.mask.cuda(device=device)
+        return self._apply(lambda t: t.cuda(device))
+

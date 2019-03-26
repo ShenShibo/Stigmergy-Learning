@@ -12,6 +12,7 @@ from torchvision.datasets.cifar import CIFAR10 as dataset
 import copy
 
 
+
 def accuracy(outputs, labels):
     _, predicted = torch.max(outputs.data, 1)
     correct = (predicted == labels.data).sum()
@@ -41,7 +42,7 @@ def train(args=None):
     use_cuda = torch.cuda.is_available() and args.cuda
     # network declaration
     if args.network == 'Vgg':
-        net = VGG(epsilon=args.epsilon, method=2)
+        net = Svgg(num_classes=10, update_round=1, is_stigmergy=True, ksai=0.9)
     else:
         return
     name_net = args.name
@@ -50,7 +51,7 @@ def train(args=None):
             net.load_state_dict(torch.load(f))
     if use_cuda:
         torch.cuda.set_device(args.cuda_device)
-        net = net.cuda()
+        net = net.cuda(args.cuda_device)
     # 超参数设置
     epochs = args.epochs
     lr = args.lr
@@ -234,8 +235,6 @@ def mtrain(args=None):
     with open('./model/record_{}.p'.format(name_net), 'wb') as f:
         pickle.dump(dic, f)
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
@@ -253,8 +252,8 @@ if __name__ == "__main__":
     parser.add_argument('--start_epoch', type=int, default=0)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
-    parser.add_argument('-sparsity', type=bool, default=True)
-    parser.add_argument('-name', type=str, default='VGG16-cifar10-parameter')
+    parser.add_argument('-sparsity', type=bool, default=False)
+    parser.add_argument('-name', type=str, default='VGG16-cifar10-stigmergy')
     # parser.add_argument('--data_set', type=str, default='cifar10')
 
     args = parser.parse_args()
