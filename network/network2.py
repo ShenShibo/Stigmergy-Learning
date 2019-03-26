@@ -120,16 +120,22 @@ class Svgg(nn.Module):
         values /= torch.norm(values)
         num = (1-self._dr[k]) ** 2 * self.rounds
         if self.stigmergy:
-            index = (mask > 0).nonzero()
-            for i in index:
-                for j in index:
-                    if i == j:
-                        continue
-                    else:
-                        self.distance_matrices[k][i, j] = (num / (num + 1)) *\
-                                                          self.distance_matrices[k][i, j] +\
-                                                          (1 / (num + 1)) *\
-                                                          values[i] * values[j]
+            # index = (mask > 0).nonzero()
+            # for i in index:
+            #     for j in index:
+            #         if i == j:
+            #             continue
+            #         else:
+            #             self.distance_matrices[k][i, j] = (num / (num + 1)) *\
+            #                                               self.distance_matrices[k][i, j] +\
+            #                                               (1 / (num + 1)) *\
+            #                                               values[i] * values[j]
+            temp1 = values.expand(c, c)
+            temp2 = values.unsqueeze(dim=1).expand(c, c)
+            temp = temp1 * temp2
+            self.distance_matrices[k][temp > 0] *= (num / (num + 1))
+            self.distance_matrices[k] += (1 / (num+1)) * temp
+            self.distance_matrices[k] *= 1-torch.eye(c)
             values = (-self.distance_matrices[k]).exp().mm(values.unsqueeze(dim=1))
         # 状态值更新
         self.sv[k][mask > 0.] *= self.ksai
