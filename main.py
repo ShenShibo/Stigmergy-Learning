@@ -98,7 +98,7 @@ def train(args=None):
                 b_y = b_y.cuda()
             b_x = Variable(b_x)
             b_y = Variable(b_y)
-            outputs = net(b_x)
+            outputs = net(b_x, i)
             optimizer.zero_grad()
             loss = criterion(outputs, b_y)
             loss.backward()
@@ -109,7 +109,7 @@ def train(args=None):
             running_loss += loss.item()
             count += size
             correct_count += accuracy(outputs, b_y).item()
-            if (i + 1) % 100 == 0:
+            if (i + 1) % 30 == 0:
                 print('[ %d-%d ] loss: %.9f, \n'
                       'training accuracy: %.6f' % (
                       epoch + 1, i + 1, running_loss / count,
@@ -243,7 +243,7 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, help="training epochs", default=150)
     parser.add_argument('--bz', type=int, help='batch size', default=128)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
-    parser.add_argument('--cuda', type=bool, help='GPU', default=True)
+    parser.add_argument('--cuda', type=bool, help='GPU', default=False)
     parser.add_argument('-cuda_device', type=int, default=1)
     parser.add_argument('--network', type=str, default='Vgg')
     parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_0.9-0.5.p')

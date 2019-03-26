@@ -40,11 +40,8 @@ class Svgg(nn.Module):
                  is_stigmergy=True,
                  ksai = 0.9):
         super(Svgg, self).__init__()
-        self.feature = self._make_layers(cfg['D'], bn=True)
         self.distance_matrices = []
         self.sv = []
-        self.classifier = nn.Linear(512, num_classes)
-        self._initialize_weights()
         self.activation_stack = Stack()
         self.mask_stack = Stack()
         self.layer_index_stack = Stack()
@@ -52,6 +49,9 @@ class Svgg(nn.Module):
         self.stigmergy = is_stigmergy
         self.ksai = ksai
         self.rounds = 0
+        self.feature = self._make_layers(cfg['D'], bn=True)
+        self.classifier = nn.Linear(512, num_classes)
+        self._initialize_weights()
 
     def _make_layers(self, cfg=[], bn=True):
         layers = []
@@ -90,7 +90,9 @@ class Svgg(nn.Module):
     def forward(self, x, iterations):
         count = 0
         flag = False
+        # x = self.feature(x)
         for m in self.feature.modules():
+
             x = m(x)
             if iterations % self.update_round == 0 and self.training is True:
                 flag = True
@@ -100,6 +102,7 @@ class Svgg(nn.Module):
                     self.activation_stack.push(x)
                     self.layer_index_stack.push(count)
                     count += 1
+        x = x.view(x.size(0), -1)
         if flag is True:
             self.rounds += 1
         return self.classifier(x)
@@ -133,9 +136,13 @@ class Svgg(nn.Module):
         self.sv[k] = self.sv[k]+ (1-self.ksai) * values * mask
 
     def cuda(self, device=None):
-        for m, sv in zip(self.distance_matrices, self.sv):
-            m.cuda(device=device)
-            sv.cuda(device=device)
+        DEVICE = torch.device('cuda:{}'.format(device))
+        for i in range(len(self.sv)):
+            self.distance_matrices[i] = self.distance_matrices[i].to(DEVICE)
+            self.sv[i] = self.sv[i].to(DEVICE)
+        for m in self.feature.modules():
+            if isinstance(m, DropConv2d):
+                m.mask = m.mask.to(DEVICE)
         return self._apply(lambda t: t.cuda(device))
 
 
@@ -160,10 +167,11 @@ class DropConv2d(nn.Conv2d):
             self.mask[index <= self.dr] = 0.
         else:
             self.mask.fill_(1-self.dr)
+        print(self.mask.size())
+        print(input.size())
+        print(self.weight.size())
         return F.conv2d(input * self.mask.expand_as(input), self.weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
 
-    def cuda(self, device=None):
-        self.mask.cuda(device=device)
-        return self._apply(lambda t: t.cuda(device))
+
 
