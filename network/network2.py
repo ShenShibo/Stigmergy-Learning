@@ -6,7 +6,7 @@ from collections import OrderedDict
 import math
 from torch._jit_internal import weak_module
 from torch.nn.parameter import Parameter
-
+import time
 
 cfg = {
     'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -133,7 +133,7 @@ class Svgg(nn.Module):
             values = (-self.distance_matrices[k]).exp().mm(values.unsqueeze(dim=1))
         # 状态值更新
         self.sv[k][mask > 0.] *= self.ksai
-        self.sv[k] = self.sv[k]+ (1-self.ksai) * values
+        self.sv[k] = self.sv[k]+ (1-self.ksai) * values * mask
 
     def cuda(self, device=None):
         DEVICE = torch.device('cuda:{}'.format(device))
