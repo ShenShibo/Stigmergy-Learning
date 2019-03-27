@@ -61,7 +61,7 @@ class Svgg(nn.Module):
             if v == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             else:
-                self.distance_matrices.append(torch.zeros(in_channels, in_channels))
+                self.distance_matrices.append(torch.eye(in_channels))
                 self.sv.append(torch.zeros(in_channels))
                 conv2d = DropConv2d(in_channels, v, kernel_size=3, padding=1, dr=self._dr[count])
                 count += 1
@@ -135,8 +135,8 @@ class Svgg(nn.Module):
             temp = temp1 * temp2
             self.distance_matrices[k][temp > 0] *= (num / (num + 1))
             self.distance_matrices[k] += (1 / (num+1)) * temp
-            self.distance_matrices[k] *= 1-torch.eye(c)
-            values = (-self.distance_matrices[k]).exp().mm(values.unsqueeze(dim=1))
+            self.distance_matrices[torch.eye(c) > 0.] = 1.
+            values = (self.distance_matrices[k]-1).exp().mm(values.unsqueeze(dim=1))
         # 状态值更新
         self.sv[k][mask > 0.] *= self.ksai
         self.sv[k] = self.sv[k]+ (1-self.ksai) * values * mask
