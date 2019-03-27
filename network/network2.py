@@ -15,30 +15,37 @@ cfg = {
     'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
     }
 
-class Stack():
+
+class Stack(object):
     def __init__(self):
         self.items = []
+
     def push(self, item):
         self.items.append(item)
+
     def pop(self):
         return self.items.pop()
+
     def clear(self):
         del self.items[:]
+
     def empty(self):
         return self.size() == 0
+
     def size(self):
         return len(self.items)
+
     def top(self):
         return self.items[self.size()-1]
 
 
 class Svgg(nn.Module):
-    _dr = [.1, .1, .2, .2, .3, .3, .3, .4, .4, .4, .5, .5, .5]
+    _dr = [.0, .1, .2, .2, .3, .3, .3, .4, .4, .4, .5, .5, .5]
     def __init__(self,
                  num_classes=10,
-                 update_round = 1,
+                 update_round=1,
                  is_stigmergy=True,
-                 ksai = 0.9):
+                 ksai=0.9):
         super(Svgg, self).__init__()
         self.distance_matrices = []
         self.sv = []
@@ -89,6 +96,7 @@ class Svgg(nn.Module):
 
     def forward(self, x, iterations):
         count = 0
+        count2 = 0
         flag = False
         # x = self.feature(x)
         x.requires_grad_()
@@ -101,7 +109,11 @@ class Svgg(nn.Module):
                     self.activation_stack.push(x)
                     self.layer_index_stack.push(count)
                     count += 1
-            x = m(x)
+            if isinstance(m, DropConv2d):
+                x = m(x, self.sv[count2])
+                count2 += 1
+            else:
+                x = m(x)
         x = x.view(x.size(0), -1)
         if flag is True:
             self.rounds += 1
@@ -118,28 +130,18 @@ class Svgg(nn.Module):
         values = torch.sum(temp, dim=0) / (b * h * w)
         # 对更新量进行量l2正则化
         values /= torch.norm(values)
-        num = (1-self._dr[k]) ** 2 * self.rounds
         if self.stigmergy:
-            # index = (mask > 0).nonzero()
-            # for i in index:
-            #     for j in index:
-            #         if i == j:
-            #             continue
-            #         else:
-            #             self.distance_matrices[k][i, j] = (num / (num + 1)) *\
-            #                                               self.distance_matrices[k][i, j] +\
-            #                                               (1 / (num + 1)) *\
-            #                                               values[i] * values[j]
+            num = (1 - self._dr[k]) ** 2 * self.rounds
             temp1 = values.expand(c, c)
             temp2 = values.unsqueeze(dim=1).expand(c, c)
             temp = temp1 * temp2
             self.distance_matrices[k][temp > 0] *= (num / (num + 1))
             self.distance_matrices[k] += (1 / (num+1)) * temp
-            self.distance_matrices[torch.eye(c) > 0.] = 1.
-            values = (self.distance_matrices[k]-1).exp().mm(values.unsqueeze(dim=1))
+            self.distance_matrices[k][torch.eye(c) > 0.] = 1.
+            values = self.distance_matrices[k].mm(values.unsqueeze(dim=1))
         # 状态值更新
         self.sv[k][mask > 0.] *= self.ksai
-        self.sv[k] = self.sv[k]+ (1-self.ksai) * values * mask
+        self.sv[k] += (1-self.ksai) * values.squeeze() * mask
 
     def cuda(self, device=None):
         DEVICE = torch.device('cuda:{}'.format(device))
@@ -166,13 +168,17 @@ class DropConv2d(nn.Conv2d):
         self.mask = torch.Tensor(1, in_channels // groups, 1, 1)
         self.dr = dr
 
-    def forward(self, input):
+    def forward(self, input, sv=None):
+        end = int(self.in_channels * (1-self.dr))
+        self.mask.fill_(0.)
         if self.training is True:
-            index = torch.rand(1, self.in_channels, 1, 1)
-            self.mask[index > self.dr] = 1.
-            self.mask[index <= self.dr] = 0.
+            index = torch.randperm(self.in_channels)[:end]
+            self.mask[:, index, :, :] = 1.
         else:
-            self.mask.fill_(1-self.dr)
+            index = torch.argsort(sv, descending=True)[:end]
+            self.mask[:, index, :, :] = 1.
+            # index = torch.randperm(self.in_channels)[:end]
+            # self.mask[:, index, :, :] = 1.
         return F.conv2d(input * self.mask.expand_as(input), self.weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
 

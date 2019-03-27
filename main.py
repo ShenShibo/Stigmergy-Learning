@@ -19,17 +19,17 @@ def accuracy(outputs, labels):
     return correct
 
 
-def validate(net, loader, use_cuda=False):
+def validate(net, loader, use_cuda=False, device=0):
     correct_count = 0.
     count = 0.
     if use_cuda:
-        net = net.cuda()
+        net = net.cuda(device)
     for i, (b_x, b_y) in enumerate(loader, 0):
         size = b_x.shape[0]
         if use_cuda:
             b_x = b_x.cuda()
             b_y = b_y.cuda()
-        outputs = net(b_x)
+        outputs = net(b_x, i)
         c = accuracy(outputs, b_y)
         correct_count += c
         count += size
@@ -42,7 +42,7 @@ def train(args=None):
     use_cuda = torch.cuda.is_available() and args.cuda
     # network declaration
     if args.network == 'Vgg':
-        net = Svgg(num_classes=10, update_round=1, is_stigmergy=True, ksai=0.9)
+        net = Svgg(num_classes=10, update_round=5, is_stigmergy=args.stigmergy, ksai=0.8)
     else:
         return
     name_net = args.name
@@ -86,6 +86,7 @@ def train(args=None):
     vacc_save = []
     best_acc = 0.
     dic = {}
+    dic2 = {}
     for epoch in range(args.start_epoch, epochs):
         running_loss = 0.0
         correct_count = 0.
@@ -109,7 +110,7 @@ def train(args=None):
             running_loss += loss.item()
             count += size
             correct_count += accuracy(outputs, b_y).item()
-            if (i + 1) % 30 == 0:
+            if (i + 1) % 60 == 0:
                 print('[ %d-%d ] loss: %.9f, \n'
                       'training accuracy: %.6f' % (
                       epoch + 1, i + 1, running_loss / count,
@@ -125,9 +126,13 @@ def train(args=None):
             best_acc = acc
             dic['best_model'] = copy.deepcopy(net.state_dict())
         net.train(mode=True)
-        if epoch == 0:
+        if epoch == 0 or (epoch+1) % 5 == 0:
             print("save")
-            torch.save(net.state_dict(), './model/{}_{}.p'.format(name_net, epoch + 1))
+            dic2['sv'] = net.sv
+            dic2['dm'] = net.distance_matrices
+            dic2['model'] = net.state_dict().copy()
+            with open('./model/{}_{}.p'.format(name_net, epoch + 1), 'wb') as f:
+                pickle.dump(dic2, f)
     dic['loss'] = loss_save
     dic['training_accuracy'] = tacc_save
     dic['validating_accuracy'] = vacc_save
@@ -153,7 +158,7 @@ def test(args=None):
     loader = DataLoader(val_set, batch_size=256, shuffle=False, num_workers=args.workers)
 
     net.train(mode=False)
-    acc = validate(net, loader, use_cuda=use_cuda)
+    acc = validate(net, loader, use_cuda=use_cuda, device=args.cuda_device)
     print("testing accuracy : {}".format(acc))
     return
 
@@ -247,13 +252,14 @@ if __name__ == "__main__":
     parser.add_argument('-cuda_device', type=int, default=0)
     parser.add_argument('--network', type=str, default='Vgg')
     parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_0.9-0.5.p')
-    parser.add_argument('--pretrained', type=bool, default=False)
-    parser.add_argument('--pre_model', type=str, default='VGG16-cifar10-parameter-init.p')
-    parser.add_argument('--start_epoch', type=int, default=0)
+    parser.add_argument('--pretrained', type=bool, default=True)
+    parser.add_argument('--pre_model', type=str, default='VGG16-cifar10-stigmergy_1.p')
+    parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('-sparsity', type=bool, default=False)
     parser.add_argument('-name', type=str, default='VGG16-cifar10-stigmergy')
+    parser.add_argument('--stigmergy', type=bool, default=True)
     # parser.add_argument('--data_set', type=str, default='cifar10')
 
     args = parser.parse_args()
