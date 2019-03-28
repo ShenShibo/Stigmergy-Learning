@@ -48,7 +48,8 @@ def train(args=None):
     name_net = args.name
     if args.pretrained:
         with open('./model/{}'.format(args.pre_model), 'rb') as f:
-            net.load_state_dict(torch.load(f))
+            dic3 = pickle.load(f)
+            net.load_state_dict(dic3['model'])
     if use_cuda:
         torch.cuda.set_device(args.cuda_device)
         net = net.cuda(args.cuda_device)

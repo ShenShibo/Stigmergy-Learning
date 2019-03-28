@@ -111,14 +111,15 @@ class Svgg(nn.Module):
             if isinstance(m, nn.Conv2d):
                 end = int(m.in_channels * (1 - self._dr[count2]))
                 self.mask[count2].fill_(0.)
+
                 if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(self.in_channels)[:end]
+                    index = torch.randperm(m.in_channels)[:end]
                     self.mask[count2][:, index, :, :] = 1.
                 else:
                     index = torch.argsort(self.sv[count2], descending=True)[:end]
                     self.mask[count2][:, index, :, :] = 1
-                count2 += 1
                 x = m(x * self.mask[count2].expand_as(x))
+                count2 += 1
             else:
                 x = m(x)
         x = x.view(x.size(0), -1)
