@@ -42,7 +42,7 @@ def train(args=None):
     use_cuda = torch.cuda.is_available() and args.cuda
     # network declaration
     if args.network == 'Vgg':
-        net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.8)
+        net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.9)
     else:
         return
     name_net = args.name
@@ -94,7 +94,7 @@ def train(args=None):
         correct_count = 0.
         count = 0
         lr_scheduler.step()
-        if (epoch+1) == 3:
+        if (epoch+1) == 10:
             net.stigmergy = True
         for i, (b_x, b_y) in enumerate(train_loader):
             size = b_x.shape[0]
@@ -130,7 +130,7 @@ def train(args=None):
             best_acc = acc
             dic['best_model'] = copy.deepcopy(net.state_dict())
         net.train(mode=True)
-        if epoch == 0 or (epoch+1) % 5 == 0:
+        if epoch == 0 or (epoch+1) % 1 == 0:
             print("save")
             dic2['sv'] = net.sv
             dic2['dm'] = net.distance_matrices
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
     parser.add_argument('--epsilon', type=float, default=1e-6)
     parser.add_argument('--epochs', type=int, help="training epochs", default=150)
-    parser.add_argument('--bz', type=int, help='batch size', default=128)
+    parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
     parser.add_argument('-cuda_device', type=int, default=0)
@@ -265,7 +265,6 @@ if __name__ == "__main__":
     parser.add_argument('-name', type=str, default='VGG16-cifar10-stigmergy')
     parser.add_argument('--stigmergy', type=bool, default=True)
     # parser.add_argument('--data_set', type=str, default='cifar10')
-
     args = parser.parse_args()
     if args.mode == 'train':
         train(args)
