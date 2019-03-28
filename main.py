@@ -42,7 +42,7 @@ def train(args=None):
     use_cuda = torch.cuda.is_available() and args.cuda
     # network declaration
     if args.network == 'Vgg':
-        net = Svgg(num_classes=10, update_round=5, is_stigmergy=args.stigmergy, ksai=0.8)
+        net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.8)
     else:
         return
     name_net = args.name
@@ -87,11 +87,14 @@ def train(args=None):
     best_acc = 0.
     dic = {}
     dic2 = {}
+    net.stigmergy = False
     for epoch in range(args.start_epoch, epochs):
         running_loss = 0.0
         correct_count = 0.
         count = 0
         lr_scheduler.step()
+        if (epoch+1) == 3:
+            net.stigmergy = True
         for i, (b_x, b_y) in enumerate(train_loader):
             size = b_x.shape[0]
             if use_cuda:

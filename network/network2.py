@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch
 from collections import OrderedDict
 import math
+import copy
 from torch._jit_internal import weak_module
 from torch.nn.parameter import Parameter
 import time
@@ -49,13 +50,13 @@ class Svgg(nn.Module):
         super(Svgg, self).__init__()
         self.distance_matrices = []
         self.sv = []
+        self.mask = []
+        self.counter = []
         self.activation_stack = Stack()
-        self.mask_stack = Stack()
         self.layer_index_stack = Stack()
         self.update_round = update_round
         self.stigmergy = is_stigmergy
         self.ksai = ksai
-        self.rounds = 0
         self.feature = self._make_layers(cfg['D'], bn=True)
         self.classifier = nn.Linear(512, num_classes)
         self._initialize_weights()
@@ -63,15 +64,18 @@ class Svgg(nn.Module):
     def _make_layers(self, cfg=[], bn=True):
         layers = []
         in_channels = 3
-        count = 0
+        # count = 0
         for v in cfg:
             if v == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             else:
                 self.distance_matrices.append(torch.eye(in_channels))
+                self.counter.append(torch.zeros(in_channels, in_channels))
                 self.sv.append(torch.zeros(in_channels))
-                conv2d = DropConv2d(in_channels, v, kernel_size=3, padding=1, dr=self._dr[count])
-                count += 1
+                self.mask.append(torch.zeros(1, in_channels, 1, 1))
+                # conv2d = DropConv2d(in_channels, v, kernel_size=3, padding=1, dr=self._dr[count])
+                conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+                # count += 1
                 if bn:
                     layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
                 else:
@@ -81,7 +85,7 @@ class Svgg(nn.Module):
 
     def _initialize_weights(self):
         for m in self.modules():
-            if isinstance(m, DropConv2d):
+            if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
                 if m.bias is not None:
@@ -90,55 +94,60 @@ class Svgg(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
             elif isinstance(m, nn.Linear):
-                n = m.weight.size(1)
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
     def forward(self, x, iterations):
         count = 0
         count2 = 0
-        flag = False
-        # x = self.feature(x)
         x.requires_grad_()
         for _, (_, m) in enumerate(self.feature._modules.items()):
             if iterations % self.update_round == 0 and self.training is True:
-                flag = True
-                if isinstance(m, DropConv2d):
+                if isinstance(m, nn.Conv2d):
                     x.register_hook(self.compute_rank)
-                    self.mask_stack.push(m.mask)
                     self.activation_stack.push(x)
                     self.layer_index_stack.push(count)
                     count += 1
-            if isinstance(m, DropConv2d):
-                x = m(x, self.sv[count2])
+            if isinstance(m, nn.Conv2d):
+                end = int(m.in_channels * (1 - self._dr[count2]))
+                self.mask[count2].fill_(0.)
+                if self.stigmergy is False and self.training is True:
+                    index = torch.randperm(self.in_channels)[:end]
+                    self.mask[count2][:, index, :, :] = 1.
+                else:
+                    index = torch.argsort(self.sv[count2], descending=True)[:end]
+                    self.mask[count2][:, index, :, :] = 1
                 count2 += 1
+                x = m(x * self.mask[count2].expand_as(x))
             else:
                 x = m(x)
         x = x.view(x.size(0), -1)
-        if flag is True:
-            self.rounds += 1
         return self.classifier(x)
 
     def compute_rank(self, grad):
+        k = self.layer_index_stack.pop()
         activation = self.activation_stack.pop()
         b, c, h, w = activation.size()
-        mask = self.mask_stack.pop()
-        mask = mask.view(mask.size(1))
-        k = self.layer_index_stack.pop()
+        mask = self.mask[k].squeeze()
         # 求更新量
         temp = torch.abs(torch.sum(grad.data * activation.data, dim=(2, 3)))
         values = torch.sum(temp, dim=0) / (b * h * w)
         # 对更新量进行量l2正则化
         values /= torch.norm(values)
-        if self.stigmergy:
-            num = (1 - self._dr[k]) ** 2 * self.rounds
-            temp1 = values.expand(c, c)
-            temp2 = values.unsqueeze(dim=1).expand(c, c)
-            temp = temp1 * temp2
-            self.distance_matrices[k][temp > 0] *= (num / (num + 1))
-            self.distance_matrices[k] += (1 / (num+1)) * temp
-            self.distance_matrices[k][torch.eye(c) > 0.] = 1.
-            values = self.distance_matrices[k].mm(values.unsqueeze(dim=1))
+        epsilon = 0.000000001
+        # 共识主动性
+        temp1 = values.expand(c, c)
+        temp2 = values.unsqueeze(dim=1).expand(c, c)
+        temp = temp1 * temp2
+        self.counter[k][temp > 0] += 1.
+        temp3 = (self.counter[k] - 1) / (self.counter[k] + epsilon)
+        temp3[temp==0.] = 1.
+        # 更新距离矩阵
+        self.distance_matrices[k] *= temp3
+        self.distance_matrices[k] += (1-temp3) * temp
+        self.distance_matrices[k][torch.eye(c) > 0.] = 1.
+        # 共识主动更新量
+        values = self.distance_matrices[k].mm(values.unsqueeze(dim=1))
         # 状态值更新
         self.sv[k][mask > 0.] *= self.ksai
         self.sv[k] += (1-self.ksai) * values.squeeze() * mask
@@ -148,6 +157,8 @@ class Svgg(nn.Module):
         for i in range(len(self.sv)):
             self.distance_matrices[i] = self.distance_matrices[i].to(DEVICE)
             self.sv[i] = self.sv[i].to(DEVICE)
+            self.mask[i] = self.mask[i].to(DEVICE)
+            self.counter[i] = self.counter[i].to(DEVICE)
         for m in self.feature.modules():
             if isinstance(m, DropConv2d):
                 m.mask = m.mask.to(DEVICE)
