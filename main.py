@@ -42,7 +42,9 @@ def train(args=None):
     use_cuda = torch.cuda.is_available() and args.cuda
     # network declaration
     if args.network == 'Vgg':
-        net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.7)
+        net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.8)
+    elif args.network == 'ResNet':
+        net = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmery, ksai=0.8)
     else:
         return
     name_net = args.name
