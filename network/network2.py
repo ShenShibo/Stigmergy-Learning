@@ -41,13 +41,13 @@ class Stack(object):
 
 
 class Svgg(nn.Module):
-    _dr = [.0, .1, .2, .2, .3, .3, .3, .5, .5, .5, .6, .6, .6]
+    _default = [.0, .1, .2, .2, .3, .3, .3, .5, .5, .5, .5, .5, .5]
     def __init__(self,
                  num_classes=10,
                  update_round=1,
                  is_stigmergy=True,
                  ksai=0.9,
-                 gain=1.):
+                 dr=None):
         super(Svgg, self).__init__()
         self.distance_matrices = []
         self.sv = []
@@ -58,6 +58,10 @@ class Svgg(nn.Module):
         self.update_round = update_round
         self.stigmergy = is_stigmergy
         self.ksai = ksai
+        if dr is None:
+            self._dr = self._default
+        else:
+            self._dr = dr
         self.feature = self._make_layers(cfg['D'], bn=True)
         self.classifier = nn.Linear(512, num_classes)
         self._initialize_weights()

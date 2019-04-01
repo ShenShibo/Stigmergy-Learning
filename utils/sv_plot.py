@@ -4,8 +4,8 @@ import pickle
 import numpy as np
 torch.cuda.set_device(1)
 all_sv = []
-for i in range(1, 16):
-    with open('../model/VGG16-cifar10-stigmergy_{}.p'.format(i), 'rb') as f:
+for i in range(1, 151):
+    with open('../model4-ksai-0.9/VGG16-cifar10-stigmergy_{}.p'.format(i), 'rb') as f:
         all_sv.append(pickle.load(f)['sv'])
 _dr = [.0, .1, .2, .2, .3, .3, .3, .5, .5, .5, .6, .6, .6]
 val = []

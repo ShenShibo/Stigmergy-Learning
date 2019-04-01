@@ -1,7 +1,7 @@
 data/*
 *.pyc
 /.idea
-/model
+/model*
 /model1
 /model2
 /model3
