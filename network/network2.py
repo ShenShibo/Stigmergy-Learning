@@ -6,7 +6,7 @@ from collections import OrderedDict
 import math
 
 import time
-
+import torchvision.models.resnet
 cfg = {
     'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -202,9 +202,17 @@ class BasicBlock(nn.Module):
         y += x
         return self.relu(y)
 
+    def forward(self, x):
+        residual = x
+        out = self.forward1(x)
+        out = self.forward2(out)
+        return self.add_residual(residual, out)
+
+
 class SResNet(nn.Module):
     # 56 layers resnet
-    _layer = [0.5, 0.5, 0.5]
+    _layer = [0., 0., 0.]
+
     def __init__(self, num_classes=10, update_round=1, is_stigmergy=True, ksai=0.8):
         super(SResNet, self).__init__()
         self.distance_matrices = []
@@ -223,9 +231,9 @@ class SResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(16)
         self.relu = nn.ReLU(inplace=True)
 
-        self.layer1 = self._make_layer(BasicBlock, 16, 9, index=0)
-        self.layer2 = self._make_layer(BasicBlock, 32, 9, stride=2, index=1)
-        self.layer3 = self._make_layer(BasicBlock, 64, 9, stride=2, index=2)
+        self.layer1 = self._make_layer(BasicBlock, 16, 9)
+        self.layer2 = self._make_layer(BasicBlock, 32, 9, stride=2)
+        self.layer3 = self._make_layer(BasicBlock, 64, 9, stride=2)
 
         self.avgpool = nn.AvgPool2d(8, stride=1)
         self.fc = nn.Linear(64, num_classes)
@@ -234,161 +242,95 @@ class SResNet(nn.Module):
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
+                if m.bias is not None:
+                    m.bias.data.zero_()
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
 
-    def _make_layer(self, block, planes, blocks, stride=1, index=1):
+    def _make_para(self, rounds=1):
+        for i in range(rounds):
+            self.distance_matrices.append(torch.eye(self.inplanes))
+            self.counter.append(torch.zeros(self.inplanes, self.inplanes))
+            self.sv.append(torch.zeros(self.inplanes))
+            self.mask.append(torch.zeros(1, self.inplanes, 1, 1))
+
+    def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
+                nn.BatchNorm2d(planes),
             )
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
-        self.distance_matrices.append(torch.eye(self.inplanes))
-        self.counter.append(torch.zeros(self.inplanes, self.inplanes))
-        self.sv.append(torch.zeros(self.inplanes))
-        self.mask.append(torch.zeros(1, self.inplanes, 1, 1))
+        self._make_para(rounds=1)
         self.inplanes = planes
-        self.distance_matrices.append(torch.eye(self.inplanes))
-        self.counter.append(torch.zeros(self.inplanes, self.inplanes))
-        self.sv.append(torch.zeros(self.inplanes))
-        self.mask.append(torch.zeros(1, self.inplanes, 1, 1))
+        self._make_para(rounds=1)
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
-            # first layer
-            self.distance_matrices.append(torch.eye(self.inplanes))
-            self.counter.append(torch.zeros(self.inplanes, self.inplanes))
-            self.sv.append(torch.zeros(self.inplanes))
-            self.mask.append(torch.zeros(1, self.inplanes, 1, 1))
-            # second layer
-            self.distance_matrices.append(torch.eye(self.inplanes))
-            self.counter.append(torch.zeros(self.inplanes, self.inplanes))
-            self.sv.append(torch.zeros(self.inplanes))
-            self.mask.append(torch.zeros(1, self.inplanes, 1, 1))
+            self._make_para(rounds=2)
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, iterations):
         count = 0
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        for _, (_, m) in enumerate(self.layer1._modules.items()):
-            if isinstance(m, BasicBlock):
-                x.register_hook(self.compute_rank)
-                self.activation_stack.push(x)
-                self.layer_index_stack.push(count)
-                # forward channel selection
-                end = int(m.in_channels * (1 - self._layer[0]))
-                self.mask[count].fill_(0.)
-                if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(m.in_channels)[:end]
-                    self.mask[count][:, index, :, :] = 1.
-                else:
-                    index = torch.argsort(self.sv[count], descending=True)[:end]
-                    self.mask[count][:, index, :, :] = 1
-                x1 = m.forward1(x * self.mask[count].expand_as(x))
-                count += 1
-
-                x1.register_hook(self.compute_rank)
-                self.activation_stack.push(x1)
-                self.layer_index_stack.push(count)
-                # forward channel selection
-                end = int(m.in_channels * (1 - self._layer[0]))
-                self.mask[count].fill_(0.)
-                if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(m.in_channels)[:end]
-                    self.mask[count][:, index, :, :] = 1.
-                else:
-                    index = torch.argsort(self.sv[count], descending=True)[:end]
-                    self.mask[count][:, index, :, :] = 1
-                x2 = m.forward2(x1 * self.mask[count].expand_as(x1))
-                count += 1
-                x = m.add_residual(x1, x2)
-            else:
-                x = m(x)
-        for _, (_, m) in enumerate(self.layer2._modules.items()):
-            if isinstance(m, BasicBlock):
-                x.register_hook(self.compute_rank)
-                self.activation_stack.push(x)
-                self.layer_index_stack.push(count)
-                # forward channel selection
-                end = int(m.in_channels * (1 - self._layer[0]))
-                self.mask[count].fill_(0.)
-                if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(m.in_channels)[:end]
-                    self.mask[count][:, index, :, :] = 1.
-                else:
-                    index = torch.argsort(self.sv[count], descending=True)[:end]
-                    self.mask[count][:, index, :, :] = 1
-                x1 = m.forward1(x * self.mask[count].expand_as(x))
-                count += 1
-
-                x1.register_hook(self.compute_rank)
-                self.activation_stack.push(x1)
-                self.layer_index_stack.push(count)
-                # forward channel selection
-                end = int(m.in_channels * (1 - self._layer[0]))
-                self.mask[count].fill_(0.)
-                if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(m.in_channels)[:end]
-                    self.mask[count][:, index, :, :] = 1.
-                else:
-                    index = torch.argsort(self.sv[count], descending=True)[:end]
-                    self.mask[count][:, index, :, :] = 1
-                x2 = m.forward2(x1 * self.mask[count].expand_as(x1))
-                count += 1
-                x = m.add_residual(x1, x2)
-            else:
-                x = m(x)
-        for _, (_, m) in enumerate(self.layer3._modules.items()):
-            if isinstance(m, BasicBlock):
-                x.register_hook(self.compute_rank)
-                self.activation_stack.push(x)
-                self.layer_index_stack.push(count)
-                # forward channel selection
-                end = int(m.in_channels * (1 - self._layer[0]))
-                self.mask[count].fill_(0.)
-                if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(m.in_channels)[:end]
-                    self.mask[count][:, index, :, :] = 1.
-                else:
-                    index = torch.argsort(self.sv[count], descending=True)[:end]
-                    self.mask[count][:, index, :, :] = 1
-                x1 = m.forward1(x * self.mask[count].expand_as(x))
-                count += 1
-
-                x1.register_hook(self.compute_rank)
-                self.activation_stack.push(x1)
-                self.layer_index_stack.push(count)
-                # forward channel selection
-                end = int(m.in_channels * (1 - self._layer[0]))
-                self.mask[count].fill_(0.)
-                if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(m.in_channels)[:end]
-                    self.mask[count][:, index, :, :] = 1.
-                else:
-                    index = torch.argsort(self.sv[count], descending=True)[:end]
-                    self.mask[count][:, index, :, :] = 1
-                x2 = m.forward2(x1 * self.mask[count].expand_as(x1))
-                count += 1
-                x = m.add_residual(x1, x2)
-            else:
-                x = m(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        # for l, layer in enumerate([self.layer1, self.layer2, self.layer3]):
+        #     for _, (_, m) in enumerate(layer._modules.items()):
+        #         residual = x
+        #         if self.training is True:
+        #             x.register_hook(self.compute_rank)
+        #             self.activation_stack.push(x)
+        #             self.layer_index_stack.push(count)
+        #         # forward channel selection
+        #         end = int(m.conv1.in_channels * (1 - self._layer[l]))
+        #         # mask construction
+        #         self.mask[count].fill_(0.)
+        #         if self.stigmergy is False and self.training is True:
+        #             index = torch.randperm(m.conv1.in_channels)[:end]
+        #             self.mask[count][:, index, :, :] = 1.
+        #         else:
+        #             index = torch.argsort(self.sv[count], descending=True)[:end]
+        #             self.mask[count][:, index, :, :] = 1
+        #         x = m.forward1(x * self.mask[count].expand_as(x))
+        #         count += 1
+        #         # inner layer
+        #         if self.training is True:
+        #             x.register_hook(self.compute_rank)
+        #             self.activation_stack.push(x)
+        #             self.layer_index_stack.push(count)
+        #         # forward channel selection
+        #         end = int(m.conv2.in_channels * (1 - self._layer[l]))
+        #         self.mask[count].fill_(0.)
+        #         if self.stigmergy is False and self.training is True:
+        #             index = torch.randperm(m.conv2.in_channels)[:end]
+        #             self.mask[count][:, index, :, :] = 1.
+        #         else:
+        #             index = torch.argsort(self.sv[count], descending=True)[:end]
+        #             self.mask[count][:, index, :, :] = 1
+        #         x2 = m.forward2(x * self.mask[count].expand_as(x))
+        #         count += 1
+        #         x = m.add_residual(residual, x2)
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-
         return x
 
     def compute_rank(self, grad):
         k = self.layer_index_stack.pop()
         activation = self.activation_stack.pop()
         b, c, h, w = activation.size()
+
         mask = self.mask[k].squeeze()
         # 求更新量
         temp = torch.abs(torch.sum(grad.data * activation.data, dim=(2, 3)))
@@ -421,4 +363,6 @@ class SResNet(nn.Module):
             self.mask[i] = self.mask[i].to(DEVICE)
             self.counter[i] = self.counter[i].to(DEVICE)
         return self._apply(lambda t: t.cuda(device))
+
+
 

@@ -12,7 +12,6 @@ from torchvision.datasets.cifar import CIFAR10 as dataset
 import copy
 
 
-
 def accuracy(outputs, labels):
     _, predicted = torch.max(outputs.data, 1)
     correct = (predicted == labels.data).sum()
@@ -44,7 +43,8 @@ def train(args=None):
     if args.network == 'Vgg':
         net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.8)
     elif args.network == 'ResNet':
-        net = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmery, ksai=0.8)
+        net = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.8)
+        net2 = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.8)
     else:
         return
     name_net = args.name
@@ -66,7 +66,8 @@ def train(args=None):
     lr_scheduler = MultiStepLR(optimizer, milestones=[args.epochs // 2, 3 * args.epochs // 4], gamma=0.1)
     # 数据读入
     transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
+        transforms.Pad(4),
+        transforms.RandomCrop(32),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -81,7 +82,7 @@ def train(args=None):
     train_set = dataset(root='./data', train=True, download=False, transform=transform_train)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=args.workers)
     val_set = dataset(root='./data', train=False, download=False, transform=transform_test)
-    validate_loader = DataLoader(val_set, batch_size=256, shuffle=False, num_workers=args.workers)
+    validate_loader = DataLoader(val_set, batch_size=128, shuffle=False, num_workers=args.workers)
 
     # 开始训练
     loss_save = []
@@ -96,49 +97,49 @@ def train(args=None):
         correct_count = 0.
         count = 0
         lr_scheduler.step()
-        if (epoch+1) == 10:
+        if (epoch+1) == 8:
             net.stigmergy = True
         for i, (b_x, b_y) in enumerate(train_loader):
             size = b_x.shape[0]
             if use_cuda:
                 b_x = b_x.cuda()
                 b_y = b_y.cuda()
-            b_x = Variable(b_x)
-            b_y = Variable(b_y)
+            # b_x = Variable(b_x)
+            # b_y = Variable(b_y)
             outputs = net(b_x, i)
             optimizer.zero_grad()
             loss = criterion(outputs, b_y)
             loss.backward()
-            if args.sparsity:
-                net.sparsity_penalty()
             optimizer.step()
             # 计算loss
             running_loss += loss.item()
             count += size
             correct_count += accuracy(outputs, b_y).item()
-            if (i + 1) % 60 == 0:
+            if (i + 1) % 30 == 0:
                 print('[ %d-%d ] loss: %.9f, \n'
                       'training accuracy: %.6f' % (
                       epoch + 1, i + 1, running_loss / count,
                       correct_count / count))
                 tacc_save.append(correct_count / count)
                 loss_save.append(running_loss / count)
-        net.train(mode=False)
-        acc = validate(net, validate_loader, use_cuda)
-        print('[ %d-%d]\n'
-              'validating accuracy: %.6f' % (epoch+1, epochs, acc))
-        vacc_save.append(acc)
-        if acc > best_acc:
-            best_acc = acc
-            dic['best_model'] = copy.deepcopy(net.state_dict())
-        net.train(mode=True)
-        if epoch == 0 or (epoch+1) % 1 == 0:
+        if (epoch+1) % 1 == 0:
             print("save")
             dic2['sv'] = net.sv
             dic2['dm'] = net.distance_matrices
             dic2['model'] = net.state_dict().copy()
             with open('./model/{}_{}.p'.format(name_net, epoch + 1), 'wb') as f:
                 pickle.dump(dic2, f)
+        net.train(mode=False)
+        acc = validate(net, validate_loader, use_cuda, device=args.cuda_device)
+        print('[ %d-%d]\n'
+              'validating accuracy: %.6f' % (epoch+1, epochs, acc))
+        vacc_save.append(acc)
+        if acc > best_acc:
+            best_acc = acc
+            dic['best_model'] = copy.deepcopy(net.state_dict())
+            dic['best_sv'] = copy.deepcopy(net.sv)
+            dic['best_dm'] = copy.deepcopy(net.distance_matrices)
+        net.train(mode=True)
     dic['loss'] = loss_save
     dic['training_accuracy'] = tacc_save
     dic['validating_accuracy'] = vacc_save
@@ -150,101 +151,26 @@ def test(args=None):
     assert args is not None
     torch.cuda.set_device(args.cuda_device)
     use_cuda = True
-    if args.network == "Vgg":
-        net = VGG()
-    with open('./model/{}'.format(args.model), 'rb') as f:
+    net = SResNet()
+    with open('./model/ResNet56-cifar10_5.p', 'rb') as f:
         dic = pickle.load(f)
-        net.load_state_dict(dic['best_model'])
+        net.load_state_dict(dic['model'])
+        net.sv = dic['sv']
+        net.distance_matrices = dic['dm']
     transform_test = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
-
     val_set = dataset(root='./data', train=False, download=False, transform=transform_test)
-    loader = DataLoader(val_set, batch_size=256, shuffle=False, num_workers=args.workers)
-
-    net.train(mode=False)
+    loader = DataLoader(val_set, batch_size=256, shuffle=True, num_workers=args.workers)
+    net.train()
+    acc = validate(net, loader, use_cuda=use_cuda, device=args.cuda_device)
+    print("testing accuracy : {}".format(acc))
+    net.eval()
     acc = validate(net, loader, use_cuda=use_cuda, device=args.cuda_device)
     print("testing accuracy : {}".format(acc))
     return
 
-
-def mtrain(args=None):
-    assert args is not None
-    use_cuda = torch.cuda.is_available() and args.cuda
-    # network declaration
-    net = MNISTNet()
-    name_net = 'MCONV_MNIST'
-    if use_cuda:
-        torch.cuda.set_device(args.cuda_device)
-        net = net.cuda()
-    # 超参数设置
-    epochs = args.epochs
-    lr = args.lr
-    batch_size = args.bz
-    # 误差函数设置
-    criterion = nn.CrossEntropyLoss()
-    # 优化器设置
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=args.wd)
-    lr_scheduler = MultiStepLR(optimizer, milestones=[args.epochs // 2, 3 * args.epochs // 4], gamma=0.1)
-    # 数据读入
-    train_data, train_label, validate_data, validate_label = data_load()
-    # 生成数据集
-    train_set = MnistDataSet(train_data, train_label)
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    val_set = MnistDataSet(validate_data, validate_label)
-    validate_loader = DataLoader(val_set, batch_size=256)
-    # 开始训练
-    loss_save = []
-    tacc_save = []
-    vacc_save = []
-    best_acc = 0.
-    dic = {}
-    for epoch in range(args.start_epoch, epochs):
-        running_loss = 0.0
-        correct_count = 0.
-        count = 0
-        lr_scheduler.step()
-        for i, (b_x, b_y) in enumerate(train_loader):
-            size = b_x.shape[0]
-            if use_cuda:
-                b_x = b_x.cuda()
-                b_y = b_y.cuda()
-            b_x = Variable(b_x)
-            b_y = Variable(b_y)
-            outputs = net(b_x)
-            optimizer.zero_grad()
-            loss = criterion(outputs, b_y)
-            loss.backward()
-            optimizer.step()
-            # 计算loss
-            running_loss += loss.item()
-            count += size
-            correct_count += accuracy(outputs, b_y).item()
-            if (i + 1) % 50 == 0:
-                net.train(mode=False)
-                acc = validate(net, validate_loader, use_cuda)
-                vacc_save.append(acc)
-                if acc > best_acc:
-                    best_acc = acc
-                    dic['best_model'] = net.state_dict()
-                net.train(mode=True)
-                print('[ %d-%d ] loss: %.9f, \n'
-                      'training accuracy: %.6f \n'
-                      'validating accuracy: %.6f' % (
-                      epoch + 1, i + 1, running_loss / count,
-                      correct_count / count,
-                      acc))
-                tacc_save.append(correct_count / count)
-                loss_save.append(running_loss / count)
-        # if (epoch + 1) % 5 == 0 or epoch == 0:
-        #     print("save")
-        #     torch.save(net.state_dict(), './model/{}_{}.p'.format(name_net, epoch + 1))
-    dic['loss'] = loss_save
-    dic['training_accuracy'] = tacc_save
-    dic['validating_accuracy'] = vacc_save
-    with open('./model/record_{}.p'.format(name_net), 'wb') as f:
-        pickle.dump(dic, f)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -255,22 +181,20 @@ if __name__ == "__main__":
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
-    parser.add_argument('-cuda_device', type=int, default=0)
-    parser.add_argument('--network', type=str, default='Vgg')
-    parser.add_argument('--model', type=str, default='record_Vgg16_cifar10_0.9-0.5.p')
-    parser.add_argument('--pretrained', type=bool, default=True)
-    parser.add_argument('--pre_model', type=str, default='VGG16-cifar10-stigmergy_1.p')
-    parser.add_argument('--start_epoch', type=int, default=1)
+    parser.add_argument('-cuda_device', type=int, default=1)
+    parser.add_argument('--network', type=str, default='ResNet')
+    parser.add_argument('--model', type=str, default='record_ResNet56-cifar10.p')
+    parser.add_argument('--pretrained', type=bool, default=False)
+    parser.add_argument('--pre_model', type=str, default='ResNet56-cifar10_1.p')
+    parser.add_argument('--start_epoch', type=int, default=0)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('-sparsity', type=bool, default=False)
-    parser.add_argument('-name', type=str, default='VGG16-cifar10-stigmergy')
+    parser.add_argument('-name', type=str, default='ResNet56-cifar10')
     parser.add_argument('--stigmergy', type=bool, default=True)
     # parser.add_argument('--data_set', type=str, default='cifar10')
     args = parser.parse_args()
     if args.mode == 'train':
         train(args)
-    elif args.mode == 'mtrain':
-        mtrain(args)
     else:
         test(args)
