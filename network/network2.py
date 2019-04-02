@@ -193,7 +193,7 @@ class BasicBlock(nn.Module):
 
     def forward2(self, x):
         out = self.conv2(x)
-        out = self.bn1(out)
+        out = self.bn2(out)
         return out
 
     def add_residual(self, x, y):
@@ -211,7 +211,7 @@ class BasicBlock(nn.Module):
 
 class SResNet(nn.Module):
     # 56 layers resnet
-    _layer = [0., 0., 0.]
+    _layer = [0.6, 0.3, 0.1]
 
     def __init__(self, num_classes=10, update_round=1, is_stigmergy=True, ksai=0.8):
         super(SResNet, self).__init__()
@@ -282,45 +282,43 @@ class SResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        # for l, layer in enumerate([self.layer1, self.layer2, self.layer3]):
-        #     for _, (_, m) in enumerate(layer._modules.items()):
-        #         residual = x
-        #         if self.training is True:
-        #             x.register_hook(self.compute_rank)
-        #             self.activation_stack.push(x)
-        #             self.layer_index_stack.push(count)
-        #         # forward channel selection
-        #         end = int(m.conv1.in_channels * (1 - self._layer[l]))
-        #         # mask construction
-        #         self.mask[count].fill_(0.)
-        #         if self.stigmergy is False and self.training is True:
-        #             index = torch.randperm(m.conv1.in_channels)[:end]
-        #             self.mask[count][:, index, :, :] = 1.
-        #         else:
-        #             index = torch.argsort(self.sv[count], descending=True)[:end]
-        #             self.mask[count][:, index, :, :] = 1
-        #         x = m.forward1(x * self.mask[count].expand_as(x))
-        #         count += 1
-        #         # inner layer
-        #         if self.training is True:
-        #             x.register_hook(self.compute_rank)
-        #             self.activation_stack.push(x)
-        #             self.layer_index_stack.push(count)
-        #         # forward channel selection
-        #         end = int(m.conv2.in_channels * (1 - self._layer[l]))
-        #         self.mask[count].fill_(0.)
-        #         if self.stigmergy is False and self.training is True:
-        #             index = torch.randperm(m.conv2.in_channels)[:end]
-        #             self.mask[count][:, index, :, :] = 1.
-        #         else:
-        #             index = torch.argsort(self.sv[count], descending=True)[:end]
-        #             self.mask[count][:, index, :, :] = 1
-        #         x2 = m.forward2(x * self.mask[count].expand_as(x))
-        #         count += 1
-        #         x = m.add_residual(residual, x2)
+
+        for l, layer in enumerate([self.layer1, self.layer2, self.layer3]):
+            for _, (_, m) in enumerate(layer._modules.items()):
+                residual = x
+                if self.training is True:
+                    x.register_hook(self.compute_rank)
+                    self.activation_stack.push(x)
+                    self.layer_index_stack.push(count)
+                # forward channel selection
+                end = int(m.conv1.in_channels * (1 - self._layer[l]))
+                # mask construction
+                self.mask[count].fill_(0.)
+                if self.stigmergy is False and self.training is True:
+                    index = torch.randperm(m.conv1.in_channels)[:end]
+                    self.mask[count][:, index, :, :] = 1.
+                else:
+                    index = torch.argsort(self.sv[count], descending=True)[:end]
+                    self.mask[count][:, index, :, :] = 1
+                x = m.forward1(x * self.mask[count].expand_as(x))
+                count += 1
+                # inner layer
+                if self.training is True:
+                    x.register_hook(self.compute_rank)
+                    self.activation_stack.push(x)
+                    self.layer_index_stack.push(count)
+                # forward channel selection
+                end = int(m.conv2.in_channels * (1 - self._layer[l]))
+                self.mask[count].fill_(0.)
+                if self.stigmergy is False and self.training is True:
+                    index = torch.randperm(m.conv2.in_channels)[:end]
+                    self.mask[count][:, index, :, :] = 1.
+                else:
+                    index = torch.argsort(self.sv[count], descending=True)[:end]
+                    self.mask[count][:, index, :, :] = 1
+                x2 = m.forward2(x * self.mask[count].expand_as(x))
+                count += 1
+                x = m.add_residual(residual, x2)
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
