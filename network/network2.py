@@ -39,7 +39,7 @@ class Stack(object):
 
 
 class Svgg(nn.Module):
-    _default = [.0, .1, .2, .2, .3, .3, .3, .5, .5, .5, .5, .5, .5]
+    _default = [.0, .2, .3, .3, .4, .4, .4, .5, .5, .5, .5, .5, .5]
     def __init__(self,
                  num_classes=10,
                  update_round=1,
@@ -114,7 +114,6 @@ class Svgg(nn.Module):
             if isinstance(m, nn.Conv2d):
                 end = int(m.in_channels * (1 - self._dr[count2]))
                 self.mask[count2].fill_(0.)
-
                 if self.stigmergy is False and self.training is True:
                     index = torch.randperm(m.in_channels)[:end]
                     self.mask[count2][:, index, :, :] = 1.
@@ -165,6 +164,9 @@ class Svgg(nn.Module):
             self.counter[i] = self.counter[i].to(DEVICE)
         return self._apply(lambda t: t.cuda(device))
 
+class Vgg(nn.Module):
+    def __init__(self):
+        pass
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""

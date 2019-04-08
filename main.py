@@ -1,8 +1,8 @@
-from process import *
+# -*-coding:utf-8-*-
+
 from network import *
 import torch.nn as nn
 from torch.utils.data.dataloader import DataLoader
-from torch.autograd import Variable
 from torch.optim.lr_scheduler import MultiStepLR
 import pickle
 import torch
@@ -41,10 +41,10 @@ def train(args=None):
     use_cuda = torch.cuda.is_available() and args.cuda
     # network declaration
     if args.network == 'Vgg':
-        net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.8)
+        print("Vgg")
+        net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=args.ksai)
     elif args.network == 'ResNet':
-        net = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.8)
-        net2 = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.8)
+        net = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.4)
     else:
         return
     name_net = args.name
@@ -97,7 +97,7 @@ def train(args=None):
         correct_count = 0.
         count = 0
         lr_scheduler.step()
-        if (epoch+1) == 8:
+        if (epoch+1) == 15:
             net.stigmergy = True
         for i, (b_x, b_y) in enumerate(train_loader):
             size = b_x.shape[0]
@@ -122,12 +122,12 @@ def train(args=None):
                       correct_count / count))
                 tacc_save.append(correct_count / count)
                 loss_save.append(running_loss / count)
-        if (epoch+1) % 1 == 0:
+        if (epoch+1) % 5 == 0:
             print("save")
             dic2['sv'] = net.sv
             dic2['dm'] = net.distance_matrices
             dic2['model'] = net.state_dict().copy()
-            with open('./model/{}_{}.p'.format(name_net, epoch + 1), 'wb') as f:
+            with open('./model/{}-{}-ksai-{}.p'.format(name_net, epoch + 1, args.ksai), 'wb') as f:
                 pickle.dump(dic2, f)
         net.train(mode=False)
         acc = validate(net, validate_loader, use_cuda, device=args.cuda_device)
@@ -143,7 +143,7 @@ def train(args=None):
     dic['loss'] = loss_save
     dic['training_accuracy'] = tacc_save
     dic['validating_accuracy'] = vacc_save
-    with open('./model/record_{}.p'.format(name_net), 'wb') as f:
+    with open('./model/record-{}-ksai-{}.p'.format(name_net, args.ksai), 'wb') as f:
         pickle.dump(dic, f)
 
 
@@ -173,24 +173,25 @@ def test(args=None):
 
 
 if __name__ == "__main__":
+    net = "Vgg16"
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
-    parser.add_argument('--epsilon', type=float, default=1e-6)
-    parser.add_argument('--epochs', type=int, help="training epochs", default=150)
+    parser.add_argument('-ksai', type=float, default=0.2)
+    parser.add_argument('--epochs', type=int, help="training epochs", default=200)
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
-    parser.add_argument('-cuda_device', type=int, default=1)
-    parser.add_argument('--network', type=str, default='ResNet')
-    parser.add_argument('--model', type=str, default='record_ResNet56-cifar10.p')
-    parser.add_argument('--pretrained', type=bool, default=False)
-    parser.add_argument('--pre_model', type=str, default='ResNet56-cifar10_1.p')
-    parser.add_argument('--start_epoch', type=int, default=0)
+    parser.add_argument('-cuda_device', type=int, default=0)
+    parser.add_argument('--network', type=str, default='Vgg')
+    parser.add_argument('--model', type=str, default='record-{}-cifar10.p'.format(net))
+    parser.add_argument('--pretrained', type=bool, default=True)
+    parser.add_argument('--pre_model', type=str, default='{}-cifar10-1.p'.format(net))
+    parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('-sparsity', type=bool, default=False)
-    parser.add_argument('-name', type=str, default='ResNet56-cifar10')
+    parser.add_argument('-name', type=str, default='{}-cifar10'.format(net))
     parser.add_argument('--stigmergy', type=bool, default=True)
     # parser.add_argument('--data_set', type=str, default='cifar10')
     args = parser.parse_args()
