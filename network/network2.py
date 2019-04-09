@@ -39,7 +39,7 @@ class Stack(object):
 
 
 class Svgg(nn.Module):
-    _default = [.0, .2, .3, .3, .4, .4, .4, .5, .5, .5, .5, .5, .5]
+    _default = [.1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1]
     def __init__(self,
                  num_classes=10,
                  update_round=1,
@@ -72,10 +72,10 @@ class Svgg(nn.Module):
             if v == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             else:
-                self.distance_matrices.append(torch.eye(in_channels))
-                self.counter.append(torch.zeros(in_channels, in_channels))
-                self.sv.append(torch.zeros(in_channels))
-                self.mask.append(torch.zeros(1, in_channels, 1, 1))
+                self.distance_matrices.append(torch.eye(v))
+                self.counter.append(torch.zeros(v, v))
+                self.sv.append(torch.zeros(v))
+                self.mask.append(torch.zeros(1, v, 1, 1))
                 # conv2d = DropConv2d(in_channels, v, kernel_size=3, padding=1, dr=self._dr[count])
                 conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
                 # count += 1
@@ -105,25 +105,26 @@ class Svgg(nn.Module):
         count2 = 0
         x.requires_grad_()
         for _, (_, m) in enumerate(self.feature._modules.items()):
-            if iterations % self.update_round == 0 and self.training is True:
-                if isinstance(m, nn.Conv2d):
+            x = m(x)
+            # save activations to compute channel utilities
+            if self.training is True:
+                if isinstance(m, nn.ReLU):
                     x.register_hook(self.compute_rank)
                     self.activation_stack.push(x)
                     self.layer_index_stack.push(count)
                     count += 1
             if isinstance(m, nn.Conv2d):
-                end = int(m.in_channels * (1 - self._dr[count2]))
+                end = int(m.out_channels * (1 - self._dr[count2]))
                 self.mask[count2].fill_(0.)
                 if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(m.in_channels)[:end]
+                    index = torch.randperm(m.out_channels)[:end]
                     self.mask[count2][:, index, :, :] = 1.
                 else:
                     index = torch.argsort(self.sv[count2], descending=True)[:end]
                     self.mask[count2][:, index, :, :] = 1
-                x = m(x * self.mask[count2].expand_as(x))
+                x = x * self.mask[count2].expand_as(x)
                 count2 += 1
-            else:
-                x = m(x)
+
         x = x.view(x.size(0), -1)
         return self.classifier(x)
 
@@ -164,9 +165,7 @@ class Svgg(nn.Module):
             self.counter[i] = self.counter[i].to(DEVICE)
         return self._apply(lambda t: t.cuda(device))
 
-class Vgg(nn.Module):
-    def __init__(self):
-        pass
+
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -230,6 +229,7 @@ class SResNet(nn.Module):
 
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1,
                                bias=False)
+
         self.bn1 = nn.BatchNorm2d(16)
         self.relu = nn.ReLU(inplace=True)
 
@@ -253,12 +253,12 @@ class SResNet(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
-    def _make_para(self, rounds=1):
+    def _make_para(self, rounds=1, planes=64):
         for i in range(rounds):
-            self.distance_matrices.append(torch.eye(self.inplanes))
-            self.counter.append(torch.zeros(self.inplanes, self.inplanes))
-            self.sv.append(torch.zeros(self.inplanes))
-            self.mask.append(torch.zeros(1, self.inplanes, 1, 1))
+            self.distance_matrices.append(torch.eye(planes))
+            self.counter.append(torch.zeros(planes, planes))
+            self.sv.append(torch.zeros(planes))
+            self.mask.append(torch.zeros(1, planes, 1, 1))
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -270,12 +270,12 @@ class SResNet(nn.Module):
             )
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
-        self._make_para(rounds=1)
+        self._make_para(rounds=1, planes=planes)
         self.inplanes = planes
-        self._make_para(rounds=1)
+        self._make_para(rounds=1, planes=planes)
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
-            self._make_para(rounds=2)
+            self._make_para(rounds=2, planes=planes)
 
         return nn.Sequential(*layers)
 
@@ -284,43 +284,47 @@ class SResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-
         for l, layer in enumerate([self.layer1, self.layer2, self.layer3]):
             for _, (_, m) in enumerate(layer._modules.items()):
                 residual = x
+                x = m.forward1(x)
                 if self.training is True:
                     x.register_hook(self.compute_rank)
                     self.activation_stack.push(x)
                     self.layer_index_stack.push(count)
                 # forward channel selection
-                end = int(m.conv1.in_channels * (1 - self._layer[l]))
+                end = int(m.conv1.out_channels * (1 - self._layer[l]))
                 # mask construction
                 self.mask[count].fill_(0.)
                 if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(m.conv1.in_channels)[:end]
+                    index = torch.randperm(m.conv1.out_channels)[:end]
                     self.mask[count][:, index, :, :] = 1.
                 else:
                     index = torch.argsort(self.sv[count], descending=True)[:end]
                     self.mask[count][:, index, :, :] = 1
-                x = m.forward1(x * self.mask[count].expand_as(x))
+                x = x * self.mask[count].expand_as(x)
                 count += 1
                 # inner layer
+                x = m.forward2(x)
                 if self.training is True:
                     x.register_hook(self.compute_rank)
                     self.activation_stack.push(x)
                     self.layer_index_stack.push(count)
                 # forward channel selection
-                end = int(m.conv2.in_channels * (1 - self._layer[l]))
+                end = int(m.conv2.out_channels * (1 - self._layer[l]))
                 self.mask[count].fill_(0.)
                 if self.stigmergy is False and self.training is True:
-                    index = torch.randperm(m.conv2.in_channels)[:end]
+                    index = torch.randperm(m.conv2.out_channels)[:end]
                     self.mask[count][:, index, :, :] = 1.
                 else:
                     index = torch.argsort(self.sv[count], descending=True)[:end]
                     self.mask[count][:, index, :, :] = 1
-                x2 = m.forward2(x * self.mask[count].expand_as(x))
+                x = x * self.mask[count].expand_as(x)
+                residual = residual * self.self.mask[count].expand_as(x)
+                x = m.add_residual(residual, x)
                 count += 1
-                x = m.add_residual(residual, x2)
+
+
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
