@@ -302,6 +302,9 @@ class SResNet(nn.Module):
                 else:
                     index = torch.argsort(self.sv[count], descending=True)[:end]
                     self.mask[count][:, index, :, :] = 1
+                # skip sensitive layers
+                if m.conv1.in_channels != m.conv1.out_channels:
+                    self.mask[count].fill_(1.)
                 x = x * self.mask[count].expand_as(x)
                 count += 1
                 # inner layer
