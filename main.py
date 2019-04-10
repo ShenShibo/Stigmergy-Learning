@@ -146,21 +146,21 @@ def test(args=None):
     return
 
 if __name__ == "__main__":
-    net = "Vgg16"
+    net = "ResNet56"
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
-    parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
+    parser.add_argument('--lr', type=float, help='initial learning rate', default=0.01)
     parser.add_argument('-ksai', type=float, default=0.6)
-    parser.add_argument('--epochs', type=int, help="training epochs", default=200)
+    parser.add_argument('--epochs', type=int, help="training epochs", default=150)
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
     parser.add_argument('-cuda_device', type=int, default=0)
-    parser.add_argument('--network', type=str, default='Vgg')
+    parser.add_argument('--network', type=str, default='ResNet')
     parser.add_argument('--model', type=str, default='record-{}-cifar10.p'.format(net))
-    parser.add_argument('--pretrained', type=bool, default=True)
+    parser.add_argument('--pretrained', type=bool, default=False)
     parser.add_argument('--pre_model', type=str, default='{}-cifar10-1-ksai-0.6.p'.format(net))
-    parser.add_argument('--start_epoch', type=int, default=1)
+    parser.add_argument('--start_epoch', type=int, default=0)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('-sparsity', type=bool, default=False)
