@@ -39,7 +39,7 @@ class Stack(object):
 
 
 class Svgg(nn.Module):
-    _default = [.1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1, .1]
+    _default = [.5, .0, .0, .0, .0, .0, .0, .5, .5, .5, .5, .5, .0]
     def __init__(self,
                  num_classes=10,
                  update_round=1,
@@ -212,7 +212,7 @@ class BasicBlock(nn.Module):
 
 class SResNet(nn.Module):
     # 56 layers resnet
-    _layer = [0.6, 0.3, 0.1]
+    _layer = [0.3, 0.3, 0.3]
 
     def __init__(self, num_classes=10, update_round=1, is_stigmergy=True, ksai=0.8):
         super(SResNet, self).__init__()
@@ -323,8 +323,6 @@ class SResNet(nn.Module):
                 residual = residual * self.self.mask[count].expand_as(x)
                 x = m.add_residual(residual, x)
                 count += 1
-
-
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)

@@ -21,7 +21,7 @@ def train(args=None):
         print("Vgg")
         net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=args.ksai)
     elif args.network == 'ResNet':
-        net = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=0.4)
+        net = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=args.ksai)
     else:
         return
     name_net = args.name
@@ -99,7 +99,7 @@ def train(args=None):
                       correct_count / count))
                 tacc_save.append(correct_count / count)
                 loss_save.append(running_loss / count)
-        if (epoch+1) % 5 == 0:
+        if (epoch+1) % 5 == 0 or epoch == 0:
             print("save")
             dic2['sv'] = net.sv
             dic2['dm'] = net.distance_matrices
@@ -145,13 +145,12 @@ def test(args=None):
     print("testing accuracy : {}".format(acc))
     return
 
-
 if __name__ == "__main__":
     net = "Vgg16"
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
-    parser.add_argument('-ksai', type=float, default=0.2)
+    parser.add_argument('-ksai', type=float, default=0.6)
     parser.add_argument('--epochs', type=int, help="training epochs", default=200)
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
@@ -160,14 +159,14 @@ if __name__ == "__main__":
     parser.add_argument('--network', type=str, default='Vgg')
     parser.add_argument('--model', type=str, default='record-{}-cifar10.p'.format(net))
     parser.add_argument('--pretrained', type=bool, default=True)
-    parser.add_argument('--pre_model', type=str, default='{}-cifar10-1.p'.format(net))
+    parser.add_argument('--pre_model', type=str, default='{}-cifar10-1-ksai-0.6.p'.format(net))
     parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('-sparsity', type=bool, default=False)
     parser.add_argument('-name', type=str, default='{}-cifar10'.format(net))
     parser.add_argument('--stigmergy', type=bool, default=True)
-    # parser.add_argument('--data_set', type=str, default='cifar10')
+
     args = parser.parse_args()
     if args.mode == 'train':
         train(args)
