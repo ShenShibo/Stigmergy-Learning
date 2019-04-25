@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch
 from collections import OrderedDict
 import math
+import numpy.random as random
 
 import time
 import torchvision.models.resnet
@@ -39,7 +40,7 @@ class Stack(object):
 
 
 class Svgg(nn.Module):
-    _default = [.5, .0, .0, .0, .0, .0, .0, .5, .5, .5, .5, .5, .0]
+    _default = [.2] * 2 + [.4] * 2 + [.6] * 3 + [.8] * 6
     def __init__(self,
                  num_classes=10,
                  update_round=1,
@@ -103,7 +104,7 @@ class Svgg(nn.Module):
     def forward(self, x, iterations):
         count = 0
         count2 = 0
-        x.requires_grad_()
+        epsilon = 0.05
         for _, (_, m) in enumerate(self.feature._modules.items()):
             x = m(x)
             # save activations to compute channel utilities
@@ -116,7 +117,10 @@ class Svgg(nn.Module):
             if isinstance(m, nn.Conv2d):
                 end = int(m.out_channels * (1 - self._dr[count2]))
                 self.mask[count2].fill_(0.)
-                if self.stigmergy is False and self.training is True:
+                if self.training is False:
+                    index = torch.argsort(self.sv[count2], descending=True)[:end]
+                    self.mask[count2][:, index, :, :] = 1
+                elif self.stigmergy is False:
                     index = torch.randperm(m.out_channels)[:end]
                     self.mask[count2][:, index, :, :] = 1.
                 else:
@@ -166,7 +170,6 @@ class Svgg(nn.Module):
         return self._apply(lambda t: t.cuda(device))
 
 
-
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
@@ -197,22 +200,22 @@ class BasicBlock(nn.Module):
         out = self.bn2(out)
         return out
 
-    def add_residual(self, x, y):
+    def add_residual(self, x, y, mask=None):
         if self.downsample is not None:
             x = self.downsample(x)
+            x *= mask.expand_as(x)
         y += x
         return self.relu(y)
 
-    def forward(self, x):
-        residual = x
-        out = self.forward1(x)
-        out = self.forward2(out)
-        return self.add_residual(residual, out)
-
+    # def forward(self, x):
+    #     residual = x
+    #     out = self.forward1(x)
+    #     out = self.forward2(out)
+    #     return self.add_residual(residual, out)
 
 class SResNet(nn.Module):
     # 56 layers resnet
-    _layer = [0.3, 0.3, 0.3]
+    _layer = [0.4, 0.4, 0.4]
 
     def __init__(self, num_classes=10, update_round=1, is_stigmergy=True, ksai=0.8):
         super(SResNet, self).__init__()
@@ -303,9 +306,8 @@ class SResNet(nn.Module):
                     index = torch.argsort(self.sv[count], descending=True)[:end]
                     self.mask[count][:, index, :, :] = 1
                 # skip sensitive layers
-                if m.conv1.in_channels != m.conv1.out_channels:
-                    print(count)
-                    self.mask[count].fill_(1.)
+                if count == 18 or count == 36:
+                   self.mask[count].fill_(1.)
                 x = x * self.mask[count].expand_as(x)
                 count += 1
                 # inner layer
@@ -325,10 +327,9 @@ class SResNet(nn.Module):
                     self.mask[count][:, index, :, :] = 1
                 # skip the final conv layer
                 if count == len(self.sv)-1:
-                    self.mask[count].fill_(1.)
+                   self.mask[count].fill_(1.)
                 x = x * self.mask[count].expand_as(x)
-                residual = residual * self.self.mask[count].expand_as(x)
-                x = m.add_residual(residual, x)
+                x = m.add_residual(residual, x, self.mask[count])
                 count += 1
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
@@ -373,5 +374,57 @@ class SResNet(nn.Module):
             self.counter[i] = self.counter[i].to(DEVICE)
         return self._apply(lambda t: t.cuda(device))
 
+
+class Vgg(nn.Module):
+    _default = [.2, .2] + [.4] * 2 + [.6] * 3 + [.8] * 6
+
+    def __init__(self, num_classes=10):
+        super(Vgg, self).__init__()
+        self._dr = self._default
+        self.distance_matrices = []
+        self.sv = []
+        self.feature = self._make_layers(cfg['D'], bn=True)
+        self.classifier = nn.Linear(int((1-self._dr[-1])*512), num_classes)
+        self._initialize_weights()
+
+    def _make_layers(self, cfg=[], bn=True):
+        layers = []
+        in_channels = 3
+        count = 0
+        for v in cfg:
+            if v == 'M':
+                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            else:
+                v = int(v * (1-self._dr[count]))
+                print(v)
+                # conv2d = DropConv2d(in_channels, v, kernel_size=3, padding=1, dr=self._dr[count])
+                conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+                count += 1
+                if bn:
+                    layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+                else:
+                    layers += [conv2d, nn.ReLU(inplace=True)]
+                in_channels = v
+        return nn.Sequential(*layers)
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
+
+    def forward(self, x, i):
+        x = self.feature(x)
+        x = x.view(x.size(0), -1)
+
+        return self.classifier(x)
 
 
