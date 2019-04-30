@@ -40,7 +40,7 @@ class Stack(object):
 
 
 class Svgg(nn.Module):
-    _default = [.2] * 2 + [.4] * 2 + [.6] * 3 + [.8] * 6
+    _default = [.0] * 2 + [.1] * 2 + [.3] * 3 + [.6] * 6
     def __init__(self,
                  num_classes=10,
                  update_round=1,
@@ -104,7 +104,6 @@ class Svgg(nn.Module):
     def forward(self, x, iterations):
         count = 0
         count2 = 0
-        epsilon = 0.05
         for _, (_, m) in enumerate(self.feature._modules.items()):
             x = m(x)
             # save activations to compute channel utilities
@@ -126,7 +125,12 @@ class Svgg(nn.Module):
                 else:
                     index = torch.argsort(self.sv[count2], descending=True)[:end]
                     self.mask[count2][:, index, :, :] = 1
+            if isinstance(m, nn.ReLU):
                 x = x * self.mask[count2].expand_as(x)
+                # 弥漫
+                # temp = self.distance_matrices[count2] * (self.mask[count2].squeeze(dim=0)).squeeze(dim=2)
+                # temp = (temp.unsqueeze(dim=-1)).unsqueeze(dim=-1)
+                # x = F.conv2d(x, temp)
                 count2 += 1
 
         x = x.view(x.size(0), -1)
@@ -215,7 +219,7 @@ class BasicBlock(nn.Module):
 
 class SResNet(nn.Module):
     # 56 layers resnet
-    _layer = [0.4, 0.4, 0.4]
+    _layer = [0.3, 0.3, 0.3]
 
     def __init__(self, num_classes=10, update_round=1, is_stigmergy=True, ksai=0.8):
         super(SResNet, self).__init__()
@@ -426,5 +430,4 @@ class Vgg(nn.Module):
         x = x.view(x.size(0), -1)
 
         return self.classifier(x)
-
 

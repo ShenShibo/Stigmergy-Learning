@@ -134,7 +134,7 @@ def test(args=None):
     # net = Vgg()
     # net = Svgg()
     net = SResNet()
-    with open('./model/record-ResNet56-0.4-1-cifar10-ksai-0.6.p', 'rb') as f:
+    with open('./model/record-ResNet56-base-2-cifar10-ksai-0.6.p', 'rb') as f:
         dic = pickle.load(f)
         net.load_state_dict(dic['best_model'])
         net.sv = dic['best_sv']
@@ -153,11 +153,11 @@ def test(args=None):
 
 
 if __name__ == "__main__":
-    net = "ResNet56-0.4-3"
+    net = "ResNet-56-0.3"
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
-    parser.add_argument('-ksai', type=float, default=0.6)
+    parser.add_argument('-ksai', type=float, default=0.95)
     parser.add_argument('--epochs', type=int, help="training epochs", default=200)
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
