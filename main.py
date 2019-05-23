@@ -19,8 +19,7 @@ def train(args=None):
     # network declaration
     if args.network == 'Vgg':
         print("Vgg")
-        # net = Vgg()
-        net = Svgg(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=args.ksai)
+        net = Svgg(num_classes=10, is_stigmergy=args.stigmergy, decay=args.decay, diffusion=args.diffusion)
     elif args.network == 'ResNet':
         print("ResNet")
         net = SResNet(num_classes=10, update_round=1, is_stigmergy=args.stigmergy, ksai=args.ksai)
@@ -84,9 +83,7 @@ def train(args=None):
             if use_cuda:
                 b_x = b_x.cuda()
                 b_y = b_y.cuda()
-            # b_x = Variable(b_x)
-            # b_y = Variable(b_y)
-            outputs = net(b_x, i)
+            outputs = net(b_x)
             optimizer.zero_grad()
             loss = criterion(outputs, b_y)
             loss.backward()
@@ -96,10 +93,11 @@ def train(args=None):
             count += size
             correct_count += accuracy(outputs, b_y).item()
             if (i + 1) % 30 == 0:
-                print('[ %d-%d ] loss: %.9f, \n'
-                      'training accuracy: %.6f' % (
-                      epoch + 1, i + 1, running_loss / count,
-                      correct_count / count))
+                print(
+                    '[ %d-%d ] loss: %.9f, \n'
+                    'training accuracy: %.6f' % (
+                    epoch+1, i + 1, running_loss / count,
+                    correct_count / count))
                 tacc_save.append(correct_count / count)
                 loss_save.append(running_loss / count)
         if epoch == 0:
@@ -107,7 +105,7 @@ def train(args=None):
             dic2['sv'] = net.sv
             dic2['dm'] = net.distance_matrices
             dic2['model'] = net.state_dict().copy()
-            with open('./model/{}-{}-ksai-{}.p'.format(name_net, epoch + 1, args.ksai), 'wb') as f:
+            with open('./model/{}-{}.p'.format(name_net, epoch + 1), 'wb') as f:
                 pickle.dump(dic2, f)
         net.train(mode=False)
         acc = validate(net, validate_loader, use_cuda, device=args.cuda_device)
@@ -117,13 +115,13 @@ def train(args=None):
         if acc > best_acc:
             best_acc = acc
             dic['best_model'] = copy.deepcopy(net.state_dict())
-            dic['best_sv'] = copy.deepcopy(net.sv)
-            dic['best_dm'] = copy.deepcopy(net.distance_matrices)
+            dic['best_cu'] = copy.deepcopy(net.sv)
+            dic['best_rm'] = copy.deepcopy(net.distance_matrices)
         net.train(mode=True)
     dic['loss'] = loss_save
     dic['training_accuracy'] = tacc_save
     dic['validating_accuracy'] = vacc_save
-    with open('./model/record-{}-ksai-{}.p'.format(name_net, args.ksai), 'wb') as f:
+    with open('./model/record-{}-diffusion-{}-decay-{}.p'.format(name_net, args.diffusion, args.decay), 'wb') as f:
         pickle.dump(dic, f)
 
 
@@ -153,25 +151,25 @@ def test(args=None):
 
 
 if __name__ == "__main__":
-    net = "ResNet56-0.3-pre-2"
+    net = "VGG-0.5"
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
-    parser.add_argument('-ksai', type=float, default=0.6)
+    parser.add_argument('-decay', type=float, default=0.8, help='decay factor in the evaporation process')
+    parser.add_argument('-diffusion', type=float, default=0.5, help='diffusion factor in the diffusion process')
     parser.add_argument('--epochs', type=int, help="training epochs", default=200)
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
-    parser.add_argument('-cuda_device', type=int, default=0)
+    parser.add_argument('-cuda_device', type=int, default=1)
     parser.add_argument('--network', type=str, default='ResNet')
-    parser.add_argument('--model', type=str, default='record-{}-cifar10.p'.format(net))
-    parser.add_argument('--pretrained', type=bool, default=True)
+    parser.add_argument('--model', type=str, default='record-{}.p'.format(net))
+    parser.add_argument('--pretrained', type=bool, default=False)
     parser.add_argument('--pre_model', type=str, default='record-ResNet56-base-1-cifar10-ksai-0.6.p'.format(net))
     parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
-    parser.add_argument('-sparsity', type=bool, default=False)
-    parser.add_argument('-name', type=str, default='{}-cifar10'.format(net))
+    parser.add_argument('-name', type=str, default='{}'.format(net))
     parser.add_argument('--stigmergy', type=bool, default=True)
     args = parser.parse_args()
     if args.mode == 'train':

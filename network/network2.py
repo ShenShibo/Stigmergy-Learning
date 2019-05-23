@@ -1,13 +1,7 @@
 # -*-coding:utf-8-*-
 import torch.nn as nn
-import torch.nn.functional as F
 import torch
-from collections import OrderedDict
 import math
-import numpy.random as random
-
-import time
-import torchvision.models.resnet
 cfg = {
     'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -41,22 +35,18 @@ class Stack(object):
 
 class Svgg(nn.Module):
     _default = [.2] * 2 + [.4] * 2 + [.6] * 3 + [.8] * 6
-    def __init__(self,
-                 num_classes=10,
-                 update_round=1,
-                 is_stigmergy=True,
-                 ksai=0.9,
-                 dr=None):
+
+    def __init__(self, num_classes=10, is_stigmergy=True, decay=0.8, dr=None, diffusion=0.5):
         super(Svgg, self).__init__()
-        self.distance_matrices = []
-        self.sv = []
+        self.relevance_matrices = []
+        self.channel_utility = []
         self.mask = []
         self.counter = []
         self.activation_stack = Stack()
         self.layer_index_stack = Stack()
-        self.update_round = update_round
         self.stigmergy = is_stigmergy
-        self.ksai = ksai
+        self.decay = decay
+        self.diffusion = diffusion
         if dr is None:
             self._dr = self._default
         else:
@@ -68,18 +58,15 @@ class Svgg(nn.Module):
     def _make_layers(self, cfg=[], bn=True):
         layers = []
         in_channels = 3
-        # count = 0
         for v in cfg:
             if v == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             else:
-                self.distance_matrices.append(torch.eye(v))
+                self.relevance_matrices.append(torch.eye(v))
                 self.counter.append(torch.zeros(v, v))
-                self.sv.append(torch.zeros(v))
+                self.channel_utility.append(torch.zeros(v))
                 self.mask.append(torch.zeros(1, v, 1, 1))
-                # conv2d = DropConv2d(in_channels, v, kernel_size=3, padding=1, dr=self._dr[count])
                 conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
-                # count += 1
                 if bn:
                     layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
                 else:
@@ -101,14 +88,15 @@ class Svgg(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
-    def forward(self, x, iterations):
+    def forward(self, x):
         count = 0
         count2 = 0
         for _, (_, m) in enumerate(self.feature._modules.items()):
             x = m(x)
-            # save activations to compute channel utilities
+            # save activations to update channel utility values
             if self.training is True:
                 if isinstance(m, nn.ReLU):
+                    # after activation layers
                     x.register_hook(self.compute_rank)
                     self.activation_stack.push(x)
                     self.layer_index_stack.push(count)
@@ -117,22 +105,17 @@ class Svgg(nn.Module):
                 end = int(m.out_channels * (1 - self._dr[count2]))
                 self.mask[count2].fill_(0.)
                 if self.training is False:
-                    index = torch.argsort(self.sv[count2], descending=True)[:end]
-                    self.mask[count2][:, index, :, :] = 1
+                    index = torch.argsort(self.channel_utility[count2], descending=True)[:end]
+                    self.mask[count2][:, index, :, :] = 1.
                 elif self.stigmergy is False:
                     index = torch.randperm(m.out_channels)[:end]
                     self.mask[count2][:, index, :, :] = 1.
                 else:
-                    index = torch.argsort(self.sv[count2], descending=True)[:end]
-                    self.mask[count2][:, index, :, :] = 1
+                    index = torch.argsort(self.channel_utility[count2], descending=True)[:end]
+                    self.mask[count2][:, index, :, :] = 1.
             if isinstance(m, nn.ReLU):
                 x = x * self.mask[count2].expand_as(x)
-                # 弥漫
-                # temp = self.distance_matrices[count2] * (self.mask[count2].squeeze(dim=0)).squeeze(dim=2)
-                # temp = (temp.unsqueeze(dim=-1)).unsqueeze(dim=-1)
-                # x = F.conv2d(x, temp)
                 count2 += 1
-
         x = x.view(x.size(0), -1)
         return self.classifier(x)
 
@@ -141,34 +124,41 @@ class Svgg(nn.Module):
         activation = self.activation_stack.pop()
         b, c, h, w = activation.size()
         mask = self.mask[k].squeeze()
-        # 求更新量
+        # calculate the criterion
         temp = torch.abs(torch.sum(grad.data * activation.data, dim=(2, 3)))
         values = torch.sum(temp, dim=0) / (b * h * w)
-        # 对更新量进行量l2正则化
+        # L2-normalization
         values /= torch.norm(values)
         epsilon = 0.000000001
-        # 共识主动性
+        # stigmergy process
         temp1 = values.expand(c, c)
         temp2 = values.unsqueeze(dim=1).expand(c, c)
         temp = temp1 * temp2
+        # update the counter whose elements indicate the forward-prop numbers of a channel pair
         self.counter[k][temp > 0] += 1.
         temp3 = (self.counter[k] - 1) / (self.counter[k] + epsilon)
-        temp3[temp==0.] = 1.
-        # 更新距离矩阵
-        self.distance_matrices[k] *= temp3
-        self.distance_matrices[k] += (1-temp3) * temp
-        self.distance_matrices[k][torch.eye(c) > 0.] = 1.
-        # 共识主动更新量
-        values = self.distance_matrices[k].mm(values.unsqueeze(dim=1))
-        # 状态值更新
-        self.sv[k][mask > 0.] *= self.ksai
-        self.sv[k] += (1-self.ksai) * values.squeeze() * mask
+        temp3[temp == 0.] = 1.
+        # update the relevance matrices
+        self.relevance_matrices[k] *= temp3
+        self.relevance_matrices[k] += (1-temp3) * temp
+        # the diagonal elements should not change
+        # self.relevance_matrices[k][torch.eye(c) > 0.] = 1.
+        self.relevance_matrices[k][torch.eye(c) > 0.] = (1 - self.diffusion) / self.diffusion
+        # two steps of the proposed stigmergy process
+        # the first and second step is aggregation and diffusion, respectively.
+        values = self.diffusion * (values + self.channel_utility[k]) * mask
+        values = self.relevance_matrices[k].mm(values.unsqueeze(dim=1))
+        # the final evaporation process
+        self.channel_utility[k][mask > 0.] = self.decay * values[mask > 0.]
+        # values = self.distance_matrices[k].mm(values.unsqueeze(dim=1))
+        # self.channel_utility[k][mask > 0.] *= self.diffusion
+        # self.channel_utility[k] += (1-self.diffusion) * values.squeeze() * mask
 
     def cuda(self, device=None):
         DEVICE = torch.device('cuda:{}'.format(device))
         for i in range(len(self.sv)):
-            self.distance_matrices[i] = self.distance_matrices[i].to(DEVICE)
-            self.sv[i] = self.sv[i].to(DEVICE)
+            self.relevance_matrices[i] = self.relevance_matrices[i].to(DEVICE)
+            self.channel_utility[i] = self.channel_utility[i].to(DEVICE)
             self.mask[i] = self.mask[i].to(DEVICE)
             self.counter[i] = self.counter[i].to(DEVICE)
         return self._apply(lambda t: t.cuda(device))

@@ -22,7 +22,7 @@ def validate(net, loader, use_cuda=False, device=0):
         if use_cuda:
             b_x = b_x.cuda()
             b_y = b_y.cuda()
-        outputs = net(b_x, i)
+        outputs = net(b_x)
         c = accuracy(outputs, b_y)
         correct_count += c
         count += size
