@@ -34,7 +34,7 @@ class Stack(object):
 
 
 class Svgg(nn.Module):
-    _default = [.2] * 2 + [.4] * 2 + [.6] * 3 + [.8] * 6
+    _default = [.0] * 2 + [.2] * 2 + [.4] * 3 + [.6] * 6
 
     def __init__(self, num_classes=10, is_stigmergy=True, decay=0.8, dr=None, diffusion=0.5):
         super(Svgg, self).__init__()
@@ -149,14 +149,14 @@ class Svgg(nn.Module):
         values = self.diffusion * (values + self.channel_utility[k]) * mask
         values = self.relevance_matrices[k].mm(values.unsqueeze(dim=1))
         # the final evaporation process
-        self.channel_utility[k][mask > 0.] = self.decay * values[mask > 0.]
+        self.channel_utility[k][mask > 0.] = self.decay * values.squeeze()[mask > 0.]
         # values = self.distance_matrices[k].mm(values.unsqueeze(dim=1))
         # self.channel_utility[k][mask > 0.] *= self.diffusion
         # self.channel_utility[k] += (1-self.diffusion) * values.squeeze() * mask
 
     def cuda(self, device=None):
         DEVICE = torch.device('cuda:{}'.format(device))
-        for i in range(len(self.sv)):
+        for i in range(len(self.channel_utility)):
             self.relevance_matrices[i] = self.relevance_matrices[i].to(DEVICE)
             self.channel_utility[i] = self.channel_utility[i].to(DEVICE)
             self.mask[i] = self.mask[i].to(DEVICE)

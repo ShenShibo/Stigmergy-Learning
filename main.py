@@ -19,6 +19,7 @@ def train(args=None):
     # network declaration
     if args.network == 'Vgg':
         print("Vgg")
+        print("diffusion:{}, decay:{}".format(args.diffusion, args.decay))
         net = Svgg(num_classes=10, is_stigmergy=args.stigmergy, decay=args.decay, diffusion=args.diffusion)
     elif args.network == 'ResNet':
         print("ResNet")
@@ -29,7 +30,7 @@ def train(args=None):
     if args.pretrained:
         with open('./model/{}'.format(args.pre_model), 'rb') as f:
             dic3 = pickle.load(f)
-            net.load_state_dict(dic3['best_model'])
+            net.load_state_dict(dic3['model'])
     if use_cuda:
         torch.cuda.set_device(args.cuda_device)
         net.cuda(device=args.cuda_device)
@@ -102,8 +103,8 @@ def train(args=None):
                 loss_save.append(running_loss / count)
         if epoch == 0:
             print("save")
-            dic2['sv'] = net.sv
-            dic2['dm'] = net.distance_matrices
+            dic2['cu'] = net.channel_utility
+            dic2['rm'] = net.relevance_matrices
             dic2['model'] = net.state_dict().copy()
             with open('./model/{}-{}.p'.format(name_net, epoch + 1), 'wb') as f:
                 pickle.dump(dic2, f)
@@ -115,8 +116,8 @@ def train(args=None):
         if acc > best_acc:
             best_acc = acc
             dic['best_model'] = copy.deepcopy(net.state_dict())
-            dic['best_cu'] = copy.deepcopy(net.sv)
-            dic['best_rm'] = copy.deepcopy(net.distance_matrices)
+            dic['best_cu'] = copy.deepcopy(net.channel_utility)
+            dic['best_rm'] = copy.deepcopy(net.relevance_matrices)
         net.train(mode=True)
     dic['loss'] = loss_save
     dic['training_accuracy'] = tacc_save
@@ -162,10 +163,10 @@ if __name__ == "__main__":
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
     parser.add_argument('-cuda_device', type=int, default=1)
-    parser.add_argument('--network', type=str, default='ResNet')
+    parser.add_argument('--network', type=str, default='Vgg')
     parser.add_argument('--model', type=str, default='record-{}.p'.format(net))
-    parser.add_argument('--pretrained', type=bool, default=False)
-    parser.add_argument('--pre_model', type=str, default='record-ResNet56-base-1-cifar10-ksai-0.6.p'.format(net))
+    parser.add_argument('--pretrained', type=bool, default=True)
+    parser.add_argument('--pre_model', type=str, default='VGG-0.5-1.p'.format(net))
     parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
