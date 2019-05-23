@@ -40,7 +40,7 @@ class Stack(object):
 
 
 class Svgg(nn.Module):
-    _default = [.0] * 2 + [.1] * 2 + [.3] * 3 + [.6] * 6
+    _default = [.2] * 2 + [.4] * 2 + [.6] * 3 + [.8] * 6
     def __init__(self,
                  num_classes=10,
                  update_round=1,
@@ -217,10 +217,10 @@ class BasicBlock(nn.Module):
     #     out = self.forward2(out)
     #     return self.add_residual(residual, out)
 
+
 class SResNet(nn.Module):
     # 56 layers resnet
     _layer = [0.3, 0.3, 0.3]
-
     def __init__(self, num_classes=10, update_round=1, is_stigmergy=True, ksai=0.8):
         super(SResNet, self).__init__()
         self.distance_matrices = []

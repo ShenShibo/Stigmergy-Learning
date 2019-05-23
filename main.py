@@ -30,7 +30,7 @@ def train(args=None):
     if args.pretrained:
         with open('./model/{}'.format(args.pre_model), 'rb') as f:
             dic3 = pickle.load(f)
-            net.load_state_dict(dic3['model'])
+            net.load_state_dict(dic3['best_model'])
     if use_cuda:
         torch.cuda.set_device(args.cuda_device)
         net.cuda(device=args.cuda_device)
@@ -132,14 +132,14 @@ def test(args=None):
     torch.cuda.set_device(args.cuda_device)
     use_cuda = True
     # net = Vgg()
-    # net = Svgg()
-    net = SResNet()
-    with open('./model/record-ResNet56-base-2-cifar10-ksai-0.6.p', 'rb') as f:
+    net = Svgg()
+    # net = SResNet()
+    with open('./model1/record-Vgg16-0.7-pre-2-cifar10-ksai-0.6.p', 'rb') as f:
         dic = pickle.load(f)
         net.load_state_dict(dic['best_model'])
         net.sv = dic['best_sv']
         net.distance_matrices = dic['best_dm']
-        print(dic['validating_accuracy'])
+        print(max(dic['validating_accuracy']), dic['validating_accuracy'])
     transform_test = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -153,27 +153,26 @@ def test(args=None):
 
 
 if __name__ == "__main__":
-    net = "ResNet-56-0.3"
+    net = "ResNet56-0.3-pre-2"
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
-    parser.add_argument('-ksai', type=float, default=0.95)
+    parser.add_argument('-ksai', type=float, default=0.6)
     parser.add_argument('--epochs', type=int, help="training epochs", default=200)
     parser.add_argument('--bz', type=int, help='batch size', default=64)
     parser.add_argument('--wd', type=float, help='weight decay', default=1e-4)
     parser.add_argument('--cuda', type=bool, help='GPU', default=True)
-    parser.add_argument('-cuda_device', type=int, default=1)
+    parser.add_argument('-cuda_device', type=int, default=0)
     parser.add_argument('--network', type=str, default='ResNet')
     parser.add_argument('--model', type=str, default='record-{}-cifar10.p'.format(net))
     parser.add_argument('--pretrained', type=bool, default=True)
-    parser.add_argument('--pre_model', type=str, default='ResNet56-cifar10-1-ksai-0.6.p'.format(net))
+    parser.add_argument('--pre_model', type=str, default='record-ResNet56-base-1-cifar10-ksai-0.6.p'.format(net))
     parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('-sparsity', type=bool, default=False)
     parser.add_argument('-name', type=str, default='{}-cifar10'.format(net))
     parser.add_argument('--stigmergy', type=bool, default=True)
-
     args = parser.parse_args()
     if args.mode == 'train':
         train(args)
