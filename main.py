@@ -152,7 +152,7 @@ def test(args=None):
 
 
 if __name__ == "__main__":
-    net = "VGG-0.5"
+    net = "VGG-0.5-2"
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', type=str, help='training or testing')
     parser.add_argument('--lr', type=float, help='initial learning rate', default=0.1)
